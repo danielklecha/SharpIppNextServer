@@ -1,0 +1,9 @@
+@HostAddress = http://localhost:631
+
+GET {{HostAddress}}/
+Accept: application/json
+
+###
+
+POST {{HostAddress}}/
+Accept: application/ipp
