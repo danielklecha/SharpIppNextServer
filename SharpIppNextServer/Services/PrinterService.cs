@@ -10,42 +10,17 @@ using SharpIppNextServer.Models;
 
 namespace SharpIppNextServer.Services;
 
-public class PrinterService : IDisposable, IAsyncDisposable
+public class PrinterService(
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<PrinterService> logger,
+    IOptions<PrinterOptions> printerOptions) : IDisposable, IAsyncDisposable
 {
     private bool disposedValue;
     private int _newJobIndex = DateTime.UtcNow.Day * 1000;
-    private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly ILogger<PrinterService> _logger;
-    private readonly SharpIppServer _ippServer;
-    private readonly IOptions<PrinterOptions> _options;
-    private readonly FileExtensionContentTypeProvider _contentTypeProvider;
+    private readonly SharpIppServer _ippServer = new();
     private bool _isPaused;
     private readonly ConcurrentDictionary<int, PrinterJob> _jobs = new();
-    private readonly string _documentFormatDefault;
     private readonly DateTimeOffset _startTime = DateTimeOffset.UtcNow.AddMinutes(-1);
-    private readonly PrintScaling _printScalingDefault = PrintScaling.Auto;
-    private readonly Sides _sidesDefault = Sides.OneSided;
-    private readonly string _mediaDefault = "iso_a4_210x297mm";
-    private readonly Resolution _printerResolutionDefault = new(600, 600, ResolutionUnit.DotsPerInch);
-    private readonly Finishings _finishingsDefault = Finishings.None;
-    private readonly PrintQuality _printQualityDefault = PrintQuality.High;
-    private readonly int _jobPriorityDefault = 1;
-    private readonly int _copiesDefault = 1;
-    private readonly Orientation _orientationRequestedDefault = Orientation.Portrait;
-    private readonly JobHoldUntil _jobHoldUntil = JobHoldUntil.NoHold;
-
-    public PrinterService(
-        IHttpContextAccessor httpContextAccessor,
-        ILogger<PrinterService> logger,
-        IOptions<PrinterOptions> options)
-    {
-        _httpContextAccessor = httpContextAccessor;
-        _logger = logger;
-        _ippServer = new SharpIppServer();
-        _options = options;
-        _contentTypeProvider = new FileExtensionContentTypeProvider();
-        _documentFormatDefault = _contentTypeProvider.Mappings[".pdf"];
-    }
 
     private int GetNextValue()
     {
@@ -82,7 +57,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
         }
         catch (IppRequestException ex)
         {
-            _logger.LogError(ex, "Unable to process request");
+            logger.LogError(ex, "Unable to process request");
             var response = new IppResponseMessage
             {
                 RequestId = ex.RequestMessage.RequestId,
@@ -97,9 +72,9 @@ public class PrinterService : IDisposable, IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unable to process request");
-            if (_httpContextAccessor.HttpContext != null)
-                _httpContextAccessor.HttpContext.Response.StatusCode = 500;
+            logger.LogError(ex, "Unable to process request");
+            if (httpContextAccessor.HttpContext != null)
+                httpContextAccessor.HttpContext.Response.StatusCode = 500;
         }
     }
 
@@ -133,12 +108,12 @@ public class PrinterService : IDisposable, IAsyncDisposable
         {
             if (!await copy.TrySetStateAsync(JobState.Pending, DateTimeOffset.UtcNow))
                 return response;
-            _logger.LogInformation("Job {id} has been moved to queue", job.Id);
+            logger.LogInformation("Job {id} has been moved to queue", job.Id);
         }
         request.DocumentAttributes ??= new DocumentAttributes();
         FillWithDefaultValues(request.DocumentAttributes);
         job.Requests.Add(request);
-        _logger.LogInformation("Document has been added to job {id}", job.Id);
+        logger.LogInformation("Document has been added to job {id}", job.Id);
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
@@ -165,12 +140,12 @@ public class PrinterService : IDisposable, IAsyncDisposable
         {
             if (!await copy.TrySetStateAsync(JobState.Pending, DateTimeOffset.UtcNow))
                 return response;
-            _logger.LogInformation("Job {id} has been moved to queue", job.Id);
+            logger.LogInformation("Job {id} has been moved to queue", job.Id);
         }
         request.DocumentAttributes ??= new DocumentAttributes();
         FillWithDefaultValues(request.DocumentAttributes);
         job.Requests.Add(request);
-        _logger.LogInformation("Document has been added to job {id}", job.Id);
+        logger.LogInformation("Document has been added to job {id}", job.Id);
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
         response.JobState = JobState.Pending;
@@ -229,7 +204,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
-        _logger.LogInformation("Job {id} has been released", jobId);
+        logger.LogInformation("Job {id} has been released", jobId);
         return response;
     }
 
@@ -268,7 +243,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
         if (!_jobs.TryAdd(job.Id, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
-        _logger.LogInformation("Job {id} has been added to queue", job.Id);
+        logger.LogInformation("Job {id} has been added to queue", job.Id);
         return response;
     }
 
@@ -301,13 +276,13 @@ public class PrinterService : IDisposable, IAsyncDisposable
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
-        _logger.LogInformation("Job {id} has been held", jobId);
+        logger.LogInformation("Job {id} has been held", jobId);
         return response;
     }
 
     private GetPrinterAttributesResponse GetGetPrinterAttributesResponse(GetPrinterAttributesRequest request)
     {
-        var options = _options.Value;
+        var options = printerOptions.Value;
         bool IsRequired(string attributeName) => request.RequestedAttributes?.Contains(attributeName) ?? true;
         return new GetPrinterAttributesResponse
         {
@@ -327,7 +302,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
             PrinterName = !IsRequired(PrinterAttribute.PrinterName) ? null : options.Name,
             PrinterInfo = !IsRequired(PrinterAttribute.PrinterInfo) ? null : options.Name,
             IppVersionsSupported = !IsRequired(PrinterAttribute.IppVersionsSupported) ? null : [new IppVersion(1, 0), IppVersion.V1_1],
-            DocumentFormatDefault = !IsRequired(PrinterAttribute.DocumentFormatDefault) ? null : _documentFormatDefault,
+            DocumentFormatDefault = !IsRequired(PrinterAttribute.DocumentFormatDefault) ? null : options.DocumentFormat,
             ColorSupported = !IsRequired(PrinterAttribute.ColorSupported) ? null : true,
             PrinterCurrentTime = !IsRequired(PrinterAttribute.PrinterCurrentTime) ? null : DateTimeOffset.Now,
             OperationsSupported = !IsRequired(PrinterAttribute.OperationsSupported) ? null :
@@ -349,33 +324,33 @@ public class PrinterService : IDisposable, IAsyncDisposable
                 IppOperation.ResumePrinter
             ],
             QueuedJobCount = !IsRequired(PrinterAttribute.QueuedJobCount) ? null : _jobs.Values.Where(x => x.State == JobState.Pending || x.State == JobState.Processing).Count(),
-            DocumentFormatSupported = !IsRequired(PrinterAttribute.DocumentFormatSupported) ? null : [_documentFormatDefault],
+            DocumentFormatSupported = !IsRequired(PrinterAttribute.DocumentFormatSupported) ? null : [options.DocumentFormat],
             MultipleDocumentJobsSupported = !IsRequired(PrinterAttribute.MultipleDocumentJobsSupported) ? null : true,
             CompressionSupported = !IsRequired(PrinterAttribute.CompressionSupported) ? null : [Compression.None],
             PrinterLocation = !IsRequired(PrinterAttribute.PrinterLocation) ? null : "Internet",
-            PrintScalingDefault = !IsRequired(PrinterAttribute.PrintScalingDefault) ? null : _printScalingDefault,
-            PrintScalingSupported = !IsRequired(PrinterAttribute.PrintScalingSupported) ? null : [_printScalingDefault],
+            PrintScalingDefault = !IsRequired(PrinterAttribute.PrintScalingDefault) ? null : options.PrintScaling,
+            PrintScalingSupported = !IsRequired(PrinterAttribute.PrintScalingSupported) ? null : [options.PrintScaling],
             PrinterUriSupported = !IsRequired(PrinterAttribute.PrinterUriSupported) ? null : [GetPrinterUrl()],
             UriAuthenticationSupported = !IsRequired(PrinterAttribute.UriAuthenticationSupported) ? null : [UriAuthentication.None],
             UriSecuritySupported = !IsRequired(PrinterAttribute.UriSecuritySupported) ? null : [GetUriSecuritySupported()],
             PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(DateTimeOffset.UtcNow - _startTime).TotalSeconds,
-            MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : _mediaDefault,
-            MediaColDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : _mediaDefault,
-            MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : [_mediaDefault],
-            SidesDefault = !IsRequired(PrinterAttribute.SidesDefault) ? null : _sidesDefault,
+            MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media,
+            MediaColDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media,
+            MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : [options.Media],
+            SidesDefault = !IsRequired(PrinterAttribute.SidesDefault) ? null : options.Sides,
             SidesSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : Enum.GetValues(typeof(Sides)).Cast<Sides>().Where(x => x != Sides.Unsupported).ToArray(),
             PdlOverrideSupported = !IsRequired(PrinterAttribute.PdlOverrideSupported) ? null : "attempted",
             MultipleOperationTimeOut = !IsRequired(PrinterAttribute.MultipleOperationTimeOut) ? null : 120,
-            FinishingsDefault = !IsRequired(PrinterAttribute.FinishingsDefault) ? null : _finishingsDefault,
-            PrinterResolutionDefault = !IsRequired(PrinterAttribute.PrinterResolutionDefault) ? null : _printerResolutionDefault,
-            PrinterResolutionSupported = !IsRequired(PrinterAttribute.PrinterResolutionSupported) ? null : [_printerResolutionDefault],
-            PrintQualityDefault = !IsRequired(PrinterAttribute.PrintQualityDefault) ? null : _printQualityDefault,
-            PrintQualitySupported = !IsRequired(PrinterAttribute.PrintQualitySupported) ? null : [_printQualityDefault],
-            JobPriorityDefault = !IsRequired(PrinterAttribute.JobPriorityDefault) ? null : _jobPriorityDefault,
-            JobPrioritySupported = !IsRequired(PrinterAttribute.JobPrioritySupported) ? null : _jobPriorityDefault,
-            CopiesDefault = !IsRequired(PrinterAttribute.CopiesDefault) ? null : _copiesDefault,
-            CopiesSupported = !IsRequired(PrinterAttribute.CopiesSupported) ? null : new SharpIpp.Protocol.Models.Range(_copiesDefault, _copiesDefault),
-            OrientationRequestedDefault = !IsRequired(PrinterAttribute.OrientationRequestedDefault) ? null : _orientationRequestedDefault,
+            FinishingsDefault = !IsRequired(PrinterAttribute.FinishingsDefault) ? null : options.Finishings,
+            PrinterResolutionDefault = !IsRequired(PrinterAttribute.PrinterResolutionDefault) ? null : options.Resolution,
+            PrinterResolutionSupported = !IsRequired(PrinterAttribute.PrinterResolutionSupported) ? null : [options.Resolution],
+            PrintQualityDefault = !IsRequired(PrinterAttribute.PrintQualityDefault) ? null : options.PrintQuality,
+            PrintQualitySupported = !IsRequired(PrinterAttribute.PrintQualitySupported) ? null : [options.PrintQuality],
+            JobPriorityDefault = !IsRequired(PrinterAttribute.JobPriorityDefault) ? null : options.JobPriority,
+            JobPrioritySupported = !IsRequired(PrinterAttribute.JobPrioritySupported) ? null : options.JobPriority,
+            CopiesDefault = !IsRequired(PrinterAttribute.CopiesDefault) ? null : options.Copies,
+            CopiesSupported = !IsRequired(PrinterAttribute.CopiesSupported) ? null : new SharpIpp.Protocol.Models.Range(options.Copies, options.Copies),
+            OrientationRequestedDefault = !IsRequired(PrinterAttribute.OrientationRequestedDefault) ? null : options.Orientation,
             OrientationRequestedSupported = !IsRequired(PrinterAttribute.OrientationRequestedSupported) ? null : Enum.GetValues(typeof(Orientation)).Cast<Orientation>().Where(x => x != Orientation.Unsupported).ToArray(),
             PageRangesSupported = !IsRequired(PrinterAttribute.PageRangesSupported) ? null : false,
             PagesPerMinute = !IsRequired(PrinterAttribute.PagesPerMinute) ? null : 20,
@@ -389,7 +364,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
 
     private UriSecurity GetUriSecuritySupported()
     {
-        var request = _httpContextAccessor.HttpContext?.Request ?? throw new Exception("Unable to access HttpContext");
+        var request = httpContextAccessor.HttpContext?.Request ?? throw new Exception("Unable to access HttpContext");
         return request.IsHttps ? UriSecurity.Tls : UriSecurity.None;
     }
 
@@ -515,7 +490,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
         if (!_jobs.TryAdd(job.Id, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
-        _logger.LogInformation("Job {id} has been added to queue", job.Id);
+        logger.LogInformation("Job {id} has been added to queue", job.Id);
         return response;
     }
 
@@ -538,7 +513,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
-        _logger.LogInformation("Job {id} has been canceled", jobId);
+        logger.LogInformation("Job {id} has been canceled", jobId);
         return response;
     }
 
@@ -567,7 +542,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
             return;
         if (!_jobs.TryUpdate(jobId, copy, job))
             return;
-        _logger.LogInformation("Job {id} has been completed", job.Id);
+        logger.LogInformation("Job {id} has been completed", job.Id);
     }
 
     public async Task AddAbortedJobAsync(int jobId, Exception ex)
@@ -579,7 +554,7 @@ public class PrinterService : IDisposable, IAsyncDisposable
             return;
         if (!_jobs.TryUpdate(jobId, copy, job))
             return;
-        _logger.LogError(ex, "Job {id} has been aborted", job.Id);
+        logger.LogError(ex, "Job {id} has been aborted", job.Id);
     }
 
     private async Task<PrintJobResponse> GetPrintJobResponseAsync(PrintJobRequest request)
@@ -605,19 +580,19 @@ public class PrinterService : IDisposable, IAsyncDisposable
         if (!_jobs.TryAdd(job.Id, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
-        _logger.LogInformation("Job {id} has been added to queue", job.Id);
+        logger.LogInformation("Job {id} has been added to queue", job.Id);
         return response;
     }
 
     private string GetPrinterUrl()
     {
-        var request = _httpContextAccessor.HttpContext?.Request ?? throw new Exception("Unable to access HttpContext");
+        var request = httpContextAccessor.HttpContext?.Request ?? throw new Exception("Unable to access HttpContext");
         return $"ipp://{request.Host}{request.PathBase}{request.Path}";
     }
 
     private string GetPrinterMoreInfo()
     {
-        var request = _httpContextAccessor.HttpContext?.Request ?? throw new Exception("Unable to access HttpContext");
+        var request = httpContextAccessor.HttpContext?.Request ?? throw new Exception("Unable to access HttpContext");
         return $"{request.Scheme}://{request.Host}{request.PathBase}";
     }
 
@@ -630,24 +605,26 @@ public class PrinterService : IDisposable, IAsyncDisposable
 
     private void FillWithDefaultValues(int jobId, NewJobAttributes attributes)
     {
-        attributes.PrintScaling ??= _printScalingDefault;
-        attributes.Sides ??= _sidesDefault;
-        attributes.Media ??= _mediaDefault;
-        attributes.PrinterResolution ??= _printerResolutionDefault;
-        attributes.Finishings ??= _finishingsDefault;
-        attributes.PrintQuality ??= _printQualityDefault;
-        attributes.JobPriority ??= _jobPriorityDefault;
-        attributes.Copies ??= _copiesDefault;
-        attributes.OrientationRequested ??= _orientationRequestedDefault;
-        attributes.JobHoldUntil ??= _jobHoldUntil;
+        var options = printerOptions.Value;
+        attributes.PrintScaling ??= options.PrintScaling;
+        attributes.Sides ??= options.Sides;
+        attributes.Media ??= options.Media;
+        attributes.PrinterResolution ??= options.Resolution;
+        attributes.Finishings ??= options.Finishings;
+        attributes.PrintQuality ??= options.PrintQuality;
+        attributes.JobPriority ??= options.JobPriority;
+        attributes.Copies ??= options.Copies;
+        attributes.OrientationRequested ??= options.Orientation;
+        attributes.JobHoldUntil ??= options.JobHoldUntil;
         if (string.IsNullOrEmpty(attributes.JobName))
             attributes.JobName = $"Job {jobId}";
     }
 
     private void FillWithDefaultValues(DocumentAttributes attributes)
     {
+        var options = printerOptions.Value;
         if (string.IsNullOrEmpty(attributes.DocumentFormat))
-            attributes.DocumentFormat = _documentFormatDefault;
+            attributes.DocumentFormat = options.DocumentFormat;
     }
 
     public async ValueTask DisposeAsync()
