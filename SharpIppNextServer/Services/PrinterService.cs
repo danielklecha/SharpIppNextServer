@@ -13,14 +13,15 @@ namespace SharpIppNextServer.Services;
 public class PrinterService(
     IHttpContextAccessor httpContextAccessor,
     ILogger<PrinterService> logger,
-    IOptions<PrinterOptions> printerOptions) : IDisposable, IAsyncDisposable
+    IOptions<PrinterOptions> printerOptions,
+    IDateTimeOffsetProvider dateTimeOffsetProvider) : IDisposable, IAsyncDisposable
 {
     private bool disposedValue;
-    private int _newJobIndex = DateTime.UtcNow.Day * 1000;
+    private int _newJobIndex = dateTimeOffsetProvider.UtcNow.Day * 1000;
     private readonly SharpIppServer _ippServer = new();
     private bool _isPaused;
     private readonly ConcurrentDictionary<int, PrinterJob> _jobs = new();
-    private readonly DateTimeOffset _startTime = DateTimeOffset.UtcNow.AddMinutes(-1);
+    private readonly DateTimeOffset _startTime = dateTimeOffsetProvider.UtcNow.AddMinutes(-1);
 
     private int GetNextValue()
     {
@@ -106,7 +107,7 @@ public class PrinterService(
         var copy = new PrinterJob(job);
         if (request.LastDocument)
         {
-            if (!await copy.TrySetStateAsync(JobState.Pending, DateTimeOffset.UtcNow))
+            if (!await copy.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
                 return response;
             logger.LogInformation("Job {id} has been moved to queue", job.Id);
         }
@@ -138,7 +139,7 @@ public class PrinterService(
         var copy = new PrinterJob(job);
         if (request.LastDocument)
         {
-            if (!await copy.TrySetStateAsync(JobState.Pending, DateTimeOffset.UtcNow))
+            if (!await copy.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
                 return response;
             logger.LogInformation("Job {id} has been moved to queue", job.Id);
         }
@@ -177,7 +178,7 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
-        if (!await copy.TrySetStateAsync(JobState.Pending, DateTimeOffset.UtcNow))
+        if (!await copy.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
             return response;
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
@@ -199,7 +200,7 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
-        if (!await copy.TrySetStateAsync(JobState.Pending, DateTimeOffset.UtcNow))
+        if (!await copy.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
             return response;
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
@@ -232,7 +233,7 @@ public class PrinterService(
             JobState = JobState.Pending,
             StatusCode = IppStatusCode.ClientErrorNotPossible
         };
-        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, DateTimeOffset.UtcNow);
+        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, dateTimeOffsetProvider.UtcNow);
         response.JobId = job.Id;
         response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
         request.DocumentAttributes ??= new();
@@ -271,7 +272,7 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
-        if (!await copy.TrySetStateAsync(null, DateTimeOffset.UtcNow))
+        if (!await copy.TrySetStateAsync(null, dateTimeOffsetProvider.UtcNow))
             return response;
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
@@ -304,7 +305,7 @@ public class PrinterService(
             IppVersionsSupported = !IsRequired(PrinterAttribute.IppVersionsSupported) ? null : [new IppVersion(1, 0), IppVersion.V1_1],
             DocumentFormatDefault = !IsRequired(PrinterAttribute.DocumentFormatDefault) ? null : options.DocumentFormat,
             ColorSupported = !IsRequired(PrinterAttribute.ColorSupported) ? null : true,
-            PrinterCurrentTime = !IsRequired(PrinterAttribute.PrinterCurrentTime) ? null : DateTimeOffset.Now,
+            PrinterCurrentTime = !IsRequired(PrinterAttribute.PrinterCurrentTime) ? null : dateTimeOffsetProvider.Now,
             OperationsSupported = !IsRequired(PrinterAttribute.OperationsSupported) ? null :
             [
                 IppOperation.PrintJob,
@@ -333,7 +334,7 @@ public class PrinterService(
             PrinterUriSupported = !IsRequired(PrinterAttribute.PrinterUriSupported) ? null : [GetPrinterUrl()],
             UriAuthenticationSupported = !IsRequired(PrinterAttribute.UriAuthenticationSupported) ? null : [UriAuthentication.None],
             UriSecuritySupported = !IsRequired(PrinterAttribute.UriSecuritySupported) ? null : [GetUriSecuritySupported()],
-            PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(DateTimeOffset.UtcNow - _startTime).TotalSeconds,
+            PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds,
             MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media,
             MediaColDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media,
             MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : [options.Media],
@@ -456,7 +457,7 @@ public class PrinterService(
             Media = !IsRequired(JobAttribute.Media) ? null : jobAttributes?.Media,
             PrintQuality = !IsRequired(JobAttribute.PrintQuality) ? null : jobAttributes?.PrintQuality,
             Sides = !IsRequired(JobAttribute.Sides) ? null : jobAttributes?.Sides,
-            JobPrinterUpTime = !IsRequired(JobAttribute.JobPrinterUpTime) ? null : (int)(DateTimeOffset.UtcNow - _startTime).TotalSeconds
+            JobPrinterUpTime = !IsRequired(JobAttribute.JobPrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds
         };
         return attributes;
     }
@@ -481,7 +482,7 @@ public class PrinterService(
             StatusCode = IppStatusCode.ClientErrorNotPossible,
             JobStateReasons = [JobStateReason.None]
         };
-        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, DateTimeOffset.UtcNow);
+        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, dateTimeOffsetProvider.UtcNow);
         response.JobId = job.Id;
         response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
         request.NewJobAttributes ??= new();
@@ -508,7 +509,7 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
-        if (!await copy.TrySetStateAsync(JobState.Canceled, DateTimeOffset.UtcNow))
+        if (!await copy.TrySetStateAsync(JobState.Canceled, dateTimeOffsetProvider.UtcNow))
             return response;
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
@@ -524,7 +525,7 @@ public class PrinterService(
         foreach (var job in _jobs.Values.Where(x => x.State == JobState.Pending).OrderBy(x => x.Id))
         {
             var copy = new PrinterJob(job);
-            if (!await copy.TrySetStateAsync(JobState.Processing, DateTimeOffset.UtcNow))
+            if (!await copy.TrySetStateAsync(JobState.Processing, dateTimeOffsetProvider.UtcNow))
                 continue;
             if (!_jobs.TryUpdate(job.Id, copy, job))
                 continue;
@@ -538,7 +539,7 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId, out var job))
             return;
         var copy = new PrinterJob(job);
-        if (!await copy.TrySetStateAsync(JobState.Completed, DateTimeOffset.UtcNow))
+        if (!await copy.TrySetStateAsync(JobState.Completed, dateTimeOffsetProvider.UtcNow))
             return;
         if (!_jobs.TryUpdate(jobId, copy, job))
             return;
@@ -550,7 +551,7 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId, out var job))
             return;
         var copy = new PrinterJob(job);
-        if (!await copy.TrySetStateAsync(JobState.Aborted, DateTimeOffset.UtcNow))
+        if (!await copy.TrySetStateAsync(JobState.Aborted, dateTimeOffsetProvider.UtcNow))
             return;
         if (!_jobs.TryUpdate(jobId, copy, job))
             return;
@@ -567,7 +568,7 @@ public class PrinterService(
             StatusCode = IppStatusCode.ClientErrorNotPossible,
             JobStateReasons = [JobStateReason.None]
         };
-        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, DateTimeOffset.UtcNow);
+        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, dateTimeOffsetProvider.UtcNow);
         response.JobId = job.Id;
         response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
         request.NewJobAttributes ??= new();
@@ -575,7 +576,7 @@ public class PrinterService(
         request.DocumentAttributes ??= new();
         FillWithDefaultValues(request.DocumentAttributes);
         job.Requests.Add(request);
-        if (!await job.TrySetStateAsync(JobState.Pending, DateTimeOffset.UtcNow))
+        if (!await job.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
             return response;
         if (!_jobs.TryAdd(job.Id, job))
             return response;

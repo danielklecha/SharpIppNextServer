@@ -6,6 +6,8 @@ using SharpIppNextServer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
+    .AddSingleton<IDateTimeProvider, DateTimeProvider>()
+    .AddSingleton<IDateTimeOffsetProvider, DateTimeOffsetProvider>()
     .Configure<KestrelServerOptions>(options => options.AllowSynchronousIO = true)
     .Configure<PrinterOptions>(builder.Configuration.GetSection("Printer"))
     .AddSingleton<PrinterService>()
