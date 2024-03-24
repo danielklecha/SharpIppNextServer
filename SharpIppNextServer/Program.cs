@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Options;
 using Quartz;
+using SharpIpp;
 using SharpIppNextServer.Models;
 using SharpIppNextServer.Services;
 
@@ -8,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddSingleton<IDateTimeProvider, DateTimeProvider>()
     .AddSingleton<IDateTimeOffsetProvider, DateTimeOffsetProvider>()
+    .AddSingleton<ISharpIppServer, SharpIppServer>()
     .Configure<KestrelServerOptions>(options => options.AllowSynchronousIO = true)
     .Configure<PrinterOptions>(builder.Configuration.GetSection("Printer"))
     .AddSingleton<PrinterService>()

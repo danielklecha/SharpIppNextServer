@@ -3,7 +3,6 @@ using SharpIpp.Protocol.Models;
 using System.Collections.Concurrent;
 using SharpIpp.Protocol;
 using SharpIpp.Models;
-using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Options;
 using SharpIpp.Exceptions;
 using SharpIppNextServer.Models;
@@ -11,6 +10,7 @@ using SharpIppNextServer.Models;
 namespace SharpIppNextServer.Services;
 
 public class PrinterService(
+    ISharpIppServer sharpIppServer,
     IHttpContextAccessor httpContextAccessor,
     ILogger<PrinterService> logger,
     IOptions<PrinterOptions> printerOptions,
@@ -18,7 +18,6 @@ public class PrinterService(
 {
     private bool disposedValue;
     private int _newJobIndex = dateTimeOffsetProvider.UtcNow.Day * 1000;
-    private readonly SharpIppServer _ippServer = new();
     private bool _isPaused;
     private readonly ConcurrentDictionary<int, PrinterJob> _jobs = new();
     private readonly DateTimeOffset _startTime = dateTimeOffsetProvider.UtcNow.AddMinutes(-1);
@@ -32,7 +31,7 @@ public class PrinterService(
     {
         try
         {
-            IIppRequest request = await _ippServer.ReceiveRequestAsync(inputStream);
+            IIppRequest request = await sharpIppServer.ReceiveRequestAsync(inputStream);
             IIppResponseMessage response = request switch
             {
                 CancelJobRequest x => await GetCancelJobResponseAsync(x),
@@ -54,7 +53,7 @@ public class PrinterService(
                 ValidateJobRequest x => GetValidateJobResponse(x),
                 _ => throw new NotImplementedException()
             };
-            await _ippServer.SendResponseAsync(response, outputStream);
+            await sharpIppServer.SendResponseAsync(response, outputStream);
         }
         catch (IppRequestException ex)
         {
@@ -69,7 +68,7 @@ public class PrinterService(
             operation.Attributes.Add(new IppAttribute(Tag.Charset, JobAttribute.AttributesCharset, "utf-8"));
             operation.Attributes.Add(new IppAttribute(Tag.NaturalLanguage, JobAttribute.AttributesNaturalLanguage, "en"));
             response.Sections.Add(operation);
-            await _ippServer.SendRawResponseAsync(response, outputStream);
+            await sharpIppServer.SendRawResponseAsync(response, outputStream);
         }
         catch (Exception ex)
         {
@@ -79,8 +78,9 @@ public class PrinterService(
         }
     }
 
-    private static ValidateJobResponse GetValidateJobResponse(ValidateJobRequest request)
+    private ValidateJobResponse GetValidateJobResponse(ValidateJobRequest request)
     {
+        logger.LogInformation("Job has been validated");
         return new ValidateJobResponse
         {
             RequestId = request.RequestId,
@@ -157,6 +157,7 @@ public class PrinterService(
     private ReleaseJobResponse GetResumePrinterResponse(ResumePrinterRequest request)
     {
         _isPaused = false;
+        logger.LogInformation("Printer has been resumed");
         return new ReleaseJobResponse
         {
             RequestId = request.RequestId,
@@ -183,6 +184,7 @@ public class PrinterService(
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
         response.StatusCode = IppStatusCode.SuccessfulOk;
+        logger.LogInformation("Job {id} has been restarted", jobId);
         return response;
     }
 
@@ -216,6 +218,7 @@ public class PrinterService(
             if (_jobs.TryRemove(id, out var job))
                 await job.DisposeAsync();
         }
+        logger.LogInformation("System purged jobs");
         return new PurgeJobsResponse
         {
             RequestId = request.RequestId,
@@ -251,6 +254,7 @@ public class PrinterService(
     private PausePrinterResponse GetPausePrinterResponse(PausePrinterRequest request)
     {
         _isPaused = true;
+        logger.LogInformation("Printer has been paused");
         return new PausePrinterResponse
         {
             RequestId = request.RequestId,
@@ -285,6 +289,7 @@ public class PrinterService(
     {
         var options = printerOptions.Value;
         bool IsRequired(string attributeName) => request.RequestedAttributes?.Contains(attributeName) ?? true;
+        logger.LogInformation("System returned printer attributes");
         return new GetPrinterAttributesResponse
         {
             RequestId = request.RequestId,
@@ -383,6 +388,7 @@ public class PrinterService(
         jobs = jobs.OrderByDescending(x => x.State).ThenByDescending(x => x.Id);
         if (request.Limit.HasValue)
             jobs = jobs.Take(request.Limit.Value);
+        logger.LogInformation("System returned jobs attributes");
         return new GetJobsResponse
         {
             RequestId = request.RequestId,
@@ -408,6 +414,7 @@ public class PrinterService(
             return response;
         response.JobAttributes = GetJobAttributes(job, request.RequestedAttributes, false);
         response.StatusCode = IppStatusCode.SuccessfulOk;
+        logger.LogInformation("System returned job attributes for job {id}", jobId);
         return response;
     }
 
