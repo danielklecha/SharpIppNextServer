@@ -4,7 +4,13 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Version>1.0.0</Version>
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64</RuntimeIdentifiers>
+    <Authors>Daniel Klecha</Authors>
+    <Copyright>Daniel Klecha</Copyright>
+    <Description>IPP printer</Description>
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <RestoreLockedMode>false</RestoreLockedMode>
   </PropertyGroup>
 
   <ItemGroup>
