@@ -4,12 +4,14 @@ using Quartz;
 using SharpIpp;
 using SharpIppNextServer.Models;
 using SharpIppNextServer.Services;
+using System.IO.Abstractions;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddSingleton<IDateTimeProvider, DateTimeProvider>()
     .AddSingleton<IDateTimeOffsetProvider, DateTimeOffsetProvider>()
     .AddSingleton<ISharpIppServer, SharpIppServer>()
+    .AddSingleton<IFileSystem, FileSystem>()
     .Configure<KestrelServerOptions>(options => options.AllowSynchronousIO = true)
     .Configure<PrinterOptions>(builder.Configuration.GetSection("Printer"))
     .AddSingleton<PrinterService>()

@@ -2,12 +2,14 @@
 using Quartz;
 using SharpIpp.Models;
 using SharpIpp.Protocol.Models;
+using System.IO.Abstractions;
 
 namespace SharpIppNextServer.Services;
 
 public class JobService(
     PrinterService printerService,
-    IWebHostEnvironment env) : IJob
+    IWebHostEnvironment env,
+    IFileSystem fileSystem) : IJob
 {
     private readonly FileExtensionContentTypeProvider _contentTypeProvider = new();
 
@@ -69,7 +71,7 @@ public class JobService(
         if (!result.IsSuccessStatusCode)
             return;
         using var stream = await result.Content.ReadAsStreamAsync();
-        await SaveAsync(stream, GetFileName(prefix, request.DocumentAttributes, Path.GetFileNameWithoutExtension(request.DocumentUri.LocalPath), Path.GetExtension(request.DocumentUri.LocalPath)));
+        await SaveAsync(stream, GetFileName(prefix, request.DocumentAttributes, fileSystem.Path.GetFileNameWithoutExtension(request.DocumentUri.LocalPath), fileSystem.Path.GetExtension(request.DocumentUri.LocalPath)));
     }
 
     private string GetFileName(string prefix, DocumentAttributes? documentAttributes, string? alternativeDocumentName = null, string? alternativeExtension = null)
@@ -82,9 +84,9 @@ public class JobService(
 
     private async Task SaveAsync(Stream stream, string fileName)
     {
-        var path = Path.Combine(env.ContentRootPath, "jobs", fileName);
-        Directory.CreateDirectory(Path.Combine(env.ContentRootPath, "jobs"));
-        using var fileStream = new FileStream(path, FileMode.OpenOrCreate);
+        var path = fileSystem.Path.Combine(env.ContentRootPath, "jobs", fileName);
+        fileSystem.Directory.CreateDirectory(fileSystem.Path.Combine(env.ContentRootPath, "jobs"));
+        using var fileStream = fileSystem.FileStream.New(path, FileMode.OpenOrCreate);
         await stream.CopyToAsync(fileStream);
     }
 }
