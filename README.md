@@ -1,6 +1,6 @@
 # SharpIppNextServer
 
-IPP printer (web app) based on `SharIppNext` library.
+IPP printer (web app) based on `SharpIppNext` library.
 
 ## Installation
 
