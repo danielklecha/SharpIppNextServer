@@ -1,5 +1,8 @@
 # SharpIppNextServer
 
+[![GitHub downloads](https://img.shields.io/github/downloads/danielklecha/SharpIppNextServer/total.svg)](https://github.com/danielklecha/SharpIppNextServer/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/danielklecha/SharpIppNextServer/blob/master/LICENSE.txt)
+
 IPP printer (web app) based on `SharpIppNext` library.
 
 ## Installation
