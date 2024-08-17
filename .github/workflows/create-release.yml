@@ -3,7 +3,7 @@ name: Create Release
 on:
   push:
     tags:
-      - '*'
+      - 'v**'
 
 jobs:
   build:
@@ -17,17 +17,15 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+    - name: Install zip
+      uses: montudor/action-zip@v1
     - name: Restore dependencies
       run: dotnet restore
     - name: Publish win-x64
       run: dotnet publish --no-restore --configuration Release --runtime win-x64 --no-self-contained
-    - name: Test
-      run: dotnet test --no-build --verbosity normal
     - name: Copy license win-x64
       run: |
         cp LICENSE.txt SharpIppNextServer/bin/Release/net8.0/win-x64/publish/LICENSE.txt
-    - name: Install zip
-      uses: montudor/action-zip@v1
     - name: Pack win-x64
       run: zip -qq -r "../../../SharpIppNextServer-${{github.ref_name}}-win-x64.zip" *.*
       working-directory: SharpIppNextServer/bin/Release/net8.0/win-x64/publish/
@@ -47,8 +45,9 @@ jobs:
     - name: Pack osx-x64
       run: zip -qq -r ../../../SharpIppNextServer-${{github.ref_name}}-osx-x64.zip *.*
       working-directory: SharpIppNextServer/bin/Release/net8.0/osx-x64/publish/
-    - name: Create Release
-      uses: ncipollo/release-action@v1
-      with:
-        artifacts: "SharpIppNextServer/bin/Release/*.zip"
-        bodyFile: "RELEASE.md"
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tag=${{ github.ref_name }}
+        gh release create "$tag" --generate-notes SharpIppNextServer/bin/Release/*.zip

@@ -14,6 +14,10 @@ IPP printer (web app) based on `SharpIppNext` library.
 3. Add to `NetPrinter` app from Google Play Store
 4. Add to IPP / CUPS printing for Chrome & Chromebooks extension from Chrome Web Store.
 
+## Requirements
+
+ASP.NET Core 8.0 Runtime needs to be installed.
+
 ## Integration testing
 
 1. Install package: `sudo zypper install cups-client cups-backends`
