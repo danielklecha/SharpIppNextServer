@@ -13,6 +13,7 @@ builder.Services
     .AddSingleton<ISharpIppServer, SharpIppServer>()
     .AddSingleton<IFileSystem, FileSystem>()
     .Configure<KestrelServerOptions>(options => options.AllowSynchronousIO = true)
+    .Configure<IISServerOptions>(options => options.AllowSynchronousIO = true)
     .Configure<PrinterOptions>(builder.Configuration.GetSection("Printer"))
     .AddSingleton<PrinterService>()
     .AddHttpContextAccessor()
