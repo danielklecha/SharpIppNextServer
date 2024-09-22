@@ -17,6 +17,10 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+    - name: Replace Version in csproj files
+      run: |
+        tag=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+        find . -type f -name "*.csproj" -exec sed -i "s/<Version>.*<\/Version>/<Version>${tag}<\/Version>/g" {} \;
     - name: Install zip
       uses: montudor/action-zip@v1
     - name: Restore dependencies
