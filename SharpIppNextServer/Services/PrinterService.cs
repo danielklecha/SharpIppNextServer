@@ -334,24 +334,24 @@ public class PrinterService(
             MultipleDocumentJobsSupported = !IsRequired(PrinterAttribute.MultipleDocumentJobsSupported) ? null : true,
             CompressionSupported = !IsRequired(PrinterAttribute.CompressionSupported) ? null : [Compression.None],
             PrinterLocation = !IsRequired(PrinterAttribute.PrinterLocation) ? null : "Internet",
-            PrintScalingDefault = !IsRequired(PrinterAttribute.PrintScalingDefault) ? null : options.PrintScaling,
-            PrintScalingSupported = !IsRequired(PrinterAttribute.PrintScalingSupported) ? null : [options.PrintScaling],
+            PrintScalingDefault = !IsRequired(PrinterAttribute.PrintScalingDefault) ? null : options.PrintScaling.FirstOrDefault(),
+            PrintScalingSupported = !IsRequired(PrinterAttribute.PrintScalingSupported) ? null : options.PrintScaling,
             PrinterUriSupported = !IsRequired(PrinterAttribute.PrinterUriSupported) ? null : [GetPrinterUrl()],
             UriAuthenticationSupported = !IsRequired(PrinterAttribute.UriAuthenticationSupported) ? null : [UriAuthentication.None],
             UriSecuritySupported = !IsRequired(PrinterAttribute.UriSecuritySupported) ? null : [GetUriSecuritySupported()],
             PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds,
-            MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media,
-            MediaColDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media,
-            MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : [options.Media],
-            SidesDefault = !IsRequired(PrinterAttribute.SidesDefault) ? null : options.Sides,
+            MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media.FirstOrDefault(),
+            MediaColDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media.FirstOrDefault(),
+            MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : options.Media,
+            SidesDefault = !IsRequired(PrinterAttribute.SidesDefault) ? null : options.Sides.FirstOrDefault(),
             SidesSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : Enum.GetValues(typeof(Sides)).Cast<Sides>().Where(x => x != Sides.Unsupported).ToArray(),
             PdlOverrideSupported = !IsRequired(PrinterAttribute.PdlOverrideSupported) ? null : "attempted",
             MultipleOperationTimeOut = !IsRequired(PrinterAttribute.MultipleOperationTimeOut) ? null : 120,
             FinishingsDefault = !IsRequired(PrinterAttribute.FinishingsDefault) ? null : options.Finishings,
-            PrinterResolutionDefault = !IsRequired(PrinterAttribute.PrinterResolutionDefault) ? null : options.Resolution,
-            PrinterResolutionSupported = !IsRequired(PrinterAttribute.PrinterResolutionSupported) ? null : [options.Resolution],
-            PrintQualityDefault = !IsRequired(PrinterAttribute.PrintQualityDefault) ? null : options.PrintQuality,
-            PrintQualitySupported = !IsRequired(PrinterAttribute.PrintQualitySupported) ? null : [options.PrintQuality],
+            PrinterResolutionDefault = !IsRequired(PrinterAttribute.PrinterResolutionDefault) ? null : options.Resolution.FirstOrDefault(),
+            PrinterResolutionSupported = !IsRequired(PrinterAttribute.PrinterResolutionSupported) ? null : [options.Resolution.FirstOrDefault()],
+            PrintQualityDefault = !IsRequired(PrinterAttribute.PrintQualityDefault) ? null : options.PrintQuality.FirstOrDefault(),
+            PrintQualitySupported = !IsRequired(PrinterAttribute.PrintQualitySupported) ? null : options.PrintQuality,
             JobPriorityDefault = !IsRequired(PrinterAttribute.JobPriorityDefault) ? null : options.JobPriority,
             JobPrioritySupported = !IsRequired(PrinterAttribute.JobPrioritySupported) ? null : options.JobPriority,
             CopiesDefault = !IsRequired(PrinterAttribute.CopiesDefault) ? null : options.Copies,
@@ -445,10 +445,10 @@ public class PrinterService(
             JobStateReasons = !IsRequired(JobAttribute.JobState) ? null : [JobStateReason.None],
             DateTimeAtCreation = !IsRequired(JobAttribute.DateTimeAtCreation) ? null : job.CreatedDateTime,
             TimeAtCreation = !IsRequired(JobAttribute.TimeAtCreation) ? null : (int)(job.CreatedDateTime - _startTime).TotalSeconds,
-            DateTimeAtProcessing = !IsRequired(JobAttribute.DateTimeAtProcessing) ? null : job.ProcessingDateTime,
-            TimeAtProcessing = !IsRequired(JobAttribute.TimeAtProcessing) || !job.ProcessingDateTime.HasValue ? null : (int)(job.ProcessingDateTime.Value - _startTime).TotalSeconds,
-            DateTimeAtCompleted = !IsRequired(JobAttribute.DateTimeAtCompleted) ? null : job.CompletedDateTime,
-            TimeAtCompleted = !IsRequired(JobAttribute.TimeAtCompleted) || !job.CompletedDateTime.HasValue ? null : (int)(job.CompletedDateTime.Value - _startTime).TotalSeconds,
+            DateTimeAtProcessing = !IsRequired(JobAttribute.DateTimeAtProcessing) ? null : job.ProcessingDateTime ?? DateTimeOffset.MinValue,
+            TimeAtProcessing = !IsRequired(JobAttribute.TimeAtProcessing) ? null : job.ProcessingDateTime.HasValue ? (int)(job.ProcessingDateTime.Value - _startTime).TotalSeconds : -1,
+            DateTimeAtCompleted = !IsRequired(JobAttribute.DateTimeAtCompleted) ? null : job.CompletedDateTime ?? DateTimeOffset.MinValue,
+            TimeAtCompleted = !IsRequired(JobAttribute.TimeAtCompleted) ? null : job.CompletedDateTime.HasValue ? (int)(job.CompletedDateTime.Value - _startTime).TotalSeconds : -1,
             Compression = !IsRequired(JobAttribute.Compression) ? null : documentAttributes?.Compression,
             DocumentFormat = !IsRequired(JobAttribute.DocumentFormat) ? null : documentAttributes?.DocumentFormat,
             DocumentName = !IsRequired(JobAttribute.DocumentName) ? null : documentAttributes?.DocumentName,
@@ -614,12 +614,12 @@ public class PrinterService(
     private void FillWithDefaultValues(int jobId, NewJobAttributes attributes)
     {
         var options = printerOptions.Value;
-        attributes.PrintScaling ??= options.PrintScaling;
-        attributes.Sides ??= options.Sides;
-        attributes.Media ??= options.Media;
-        attributes.PrinterResolution ??= options.Resolution;
+        attributes.PrintScaling ??= options.PrintScaling.FirstOrDefault();
+        attributes.Sides ??= options.Sides.FirstOrDefault();
+        attributes.Media ??= options.Media.FirstOrDefault();
+        attributes.PrinterResolution ??= options.Resolution.FirstOrDefault();
         attributes.Finishings ??= options.Finishings;
-        attributes.PrintQuality ??= options.PrintQuality;
+        attributes.PrintQuality ??= options.PrintQuality.FirstOrDefault();
         attributes.JobPriority ??= options.JobPriority;
         attributes.Copies ??= options.Copies;
         attributes.OrientationRequested ??= options.Orientation;
