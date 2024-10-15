@@ -288,7 +288,8 @@ public class PrinterService(
     private GetPrinterAttributesResponse GetGetPrinterAttributesResponse(GetPrinterAttributesRequest request)
     {
         var options = printerOptions.Value;
-        bool IsRequired(string attributeName) => request.RequestedAttributes?.Contains(attributeName) ?? true;
+        var allAttributes = PrinterAttribute.GetAttributes(request.Version).ToList();
+        bool IsRequired(string attributeName) => (request.RequestedAttributes?.Contains(attributeName) ?? true);// && allAttributes.Contains(attributeName);
         logger.LogInformation("System returned printer attributes");
         return new GetPrinterAttributesResponse
         {
@@ -307,7 +308,7 @@ public class PrinterService(
             PrinterMakeAndModel = !IsRequired(PrinterAttribute.PrinterMakeAndModel) ? null : options.Name,
             PrinterName = !IsRequired(PrinterAttribute.PrinterName) ? null : options.Name,
             PrinterInfo = !IsRequired(PrinterAttribute.PrinterInfo) ? null : options.Name,
-            IppVersionsSupported = !IsRequired(PrinterAttribute.IppVersionsSupported) ? null : [new IppVersion(1, 0), IppVersion.V1_1],
+            IppVersionsSupported = !IsRequired(PrinterAttribute.IppVersionsSupported) ? null : [new IppVersion(1, 0), IppVersion.V1_1, new IppVersion(2, 0)],
             DocumentFormatDefault = !IsRequired(PrinterAttribute.DocumentFormatDefault) ? null : options.DocumentFormat,
             ColorSupported = !IsRequired(PrinterAttribute.ColorSupported) ? null : true,
             PrinterCurrentTime = !IsRequired(PrinterAttribute.PrinterCurrentTime) ? null : dateTimeOffsetProvider.Now,
@@ -341,13 +342,13 @@ public class PrinterService(
             UriSecuritySupported = !IsRequired(PrinterAttribute.UriSecuritySupported) ? null : [GetUriSecuritySupported()],
             PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds,
             MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media.FirstOrDefault(),
-            MediaColDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media.FirstOrDefault(),
             MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : options.Media,
             SidesDefault = !IsRequired(PrinterAttribute.SidesDefault) ? null : options.Sides.FirstOrDefault(),
             SidesSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : Enum.GetValues(typeof(Sides)).Cast<Sides>().Where(x => x != Sides.Unsupported).ToArray(),
             PdlOverrideSupported = !IsRequired(PrinterAttribute.PdlOverrideSupported) ? null : "attempted",
             MultipleOperationTimeOut = !IsRequired(PrinterAttribute.MultipleOperationTimeOut) ? null : 120,
-            FinishingsDefault = !IsRequired(PrinterAttribute.FinishingsDefault) ? null : options.Finishings,
+            FinishingsDefault = !IsRequired(PrinterAttribute.FinishingsDefault) ? null : options.Finishings.FirstOrDefault(),
+            FinishingsSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : options.Finishings,
             PrinterResolutionDefault = !IsRequired(PrinterAttribute.PrinterResolutionDefault) ? null : options.Resolution.FirstOrDefault(),
             PrinterResolutionSupported = !IsRequired(PrinterAttribute.PrinterResolutionSupported) ? null : [options.Resolution.FirstOrDefault()],
             PrintQualityDefault = !IsRequired(PrinterAttribute.PrintQualityDefault) ? null : options.PrintQuality.FirstOrDefault(),
@@ -365,6 +366,22 @@ public class PrinterService(
             JobHoldUntilSupported = !IsRequired(PrinterAttribute.JobHoldUntilSupported) ? null : [JobHoldUntil.NoHold],
             JobHoldUntilDefault = !IsRequired(PrinterAttribute.JobHoldUntilDefault) ? null : JobHoldUntil.NoHold,
             ReferenceUriSchemesSupported = !IsRequired(PrinterAttribute.ReferenceUriSchemesSupported) ? null : [UriScheme.Ftp, UriScheme.Http, UriScheme.Https],
+            OutputBinDefault = !IsRequired(PrinterAttribute.OutputBinDefault) ? null : options.OutputBin.FirstOrDefault(),
+            OutputBinSupported = !IsRequired(PrinterAttribute.OutputBinSupported) ? null : options.OutputBin,
+            MediaColDefault = !IsRequired(PrinterAttribute.MediaColDefault) ? null : new MediaCol
+            {
+                MediaBackCoating = MediaCoating.None,
+                MediaBottomMargin = 10,
+                MediaColor = "black",
+                MediaLeftMargin = 10,
+                MediaRightMargin = 10,
+                MediaTopMargin = 10,
+                MediaFrontCoating = MediaCoating.None,
+                MediaGrain = MediaGrain.XDirection,
+                MediaHoleCount = 0,
+                MediaInfo = "my black color",
+                MediaOrderCount = 1
+            }
         };
     }
 
@@ -618,7 +635,7 @@ public class PrinterService(
         attributes.Sides ??= options.Sides.FirstOrDefault();
         attributes.Media ??= options.Media.FirstOrDefault();
         attributes.PrinterResolution ??= options.Resolution.FirstOrDefault();
-        attributes.Finishings ??= options.Finishings;
+        attributes.Finishings ??= options.Finishings.FirstOrDefault();
         attributes.PrintQuality ??= options.PrintQuality.FirstOrDefault();
         attributes.JobPriority ??= options.JobPriority;
         attributes.Copies ??= options.Copies;
