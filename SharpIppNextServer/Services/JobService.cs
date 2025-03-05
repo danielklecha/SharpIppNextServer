@@ -48,8 +48,9 @@ public class JobService(
     {
         if (request.Document == null)
             return;
-        request.Document.Seek(0, SeekOrigin.Begin);
-        await SaveAsync(request.Document, GetFileName(prefix, request.DocumentAttributes));
+        if(request.Document.Position > 0)
+            request.Document.Seek(0, SeekOrigin.Begin);
+        await SaveAsync(request.Document, GetFileName(prefix, request.OperationAttributes?.DocumentName, request.OperationAttributes?.DocumentFormat));
         await request.Document.DisposeAsync();
     }
 
@@ -58,28 +59,28 @@ public class JobService(
         if (request.Document == null)
             return;
         request.Document.Seek(0, SeekOrigin.Begin);
-        await SaveAsync(request.Document, GetFileName(prefix, request.DocumentAttributes));
+        await SaveAsync(request.Document, GetFileName(prefix, request.OperationAttributes?.DocumentName, request.OperationAttributes?.DocumentFormat));
         await request.Document.DisposeAsync();
     }
 
     private async Task SaveAsync(string prefix, SendUriRequest request)
     {
-        if (request.DocumentUri == null)
+        if (request.OperationAttributes is null || request.OperationAttributes.DocumentUri is null)
             return;
         using var client = new HttpClient();
-        using var result = await client.GetAsync(request.DocumentUri);
+        using var result = await client.GetAsync(request.OperationAttributes.DocumentUri);
         if (!result.IsSuccessStatusCode)
             return;
         using var stream = await result.Content.ReadAsStreamAsync();
-        await SaveAsync(stream, GetFileName(prefix, request.DocumentAttributes, fileSystem.Path.GetFileNameWithoutExtension(request.DocumentUri.LocalPath), fileSystem.Path.GetExtension(request.DocumentUri.LocalPath)));
+        await SaveAsync(stream, GetFileName(prefix, request.OperationAttributes.DocumentName, request.OperationAttributes.DocumentFormat, fileSystem.Path.GetFileNameWithoutExtension(request.OperationAttributes.DocumentUri.LocalPath), fileSystem.Path.GetExtension(request.OperationAttributes.DocumentUri.LocalPath)));
     }
 
-    private string GetFileName(string prefix, DocumentAttributes? documentAttributes, string? alternativeDocumentName = null, string? alternativeExtension = null)
+    private string GetFileName(string prefix, string? documentName, string? documentFormat, string? alternativeDocumentName = null, string? alternativeExtension = null)
     {
-        var extension = documentAttributes?.DocumentFormat == null
+        var extension = documentFormat is null
             ? null
-            : _contentTypeProvider.Mappings.Where(x => x.Value == documentAttributes.DocumentFormat).Select(x => x.Key).FirstOrDefault();
-        return $"{prefix}_{documentAttributes?.DocumentName ?? alternativeDocumentName ?? "no-name"}{extension ?? alternativeExtension ?? ".unknown"}";
+            : _contentTypeProvider.Mappings.Where(x => x.Value == documentFormat).Select(x => x.Key).FirstOrDefault();
+        return $"{prefix}_{documentName ?? alternativeDocumentName ?? "no-name"}{extension ?? alternativeExtension ?? ".unknown"}";
     }
 
     private async Task SaveAsync(Stream stream, string fileName)

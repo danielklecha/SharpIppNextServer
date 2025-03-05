@@ -105,14 +105,13 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
-        if (request.LastDocument)
+        if (request.OperationAttributes?.LastDocument ?? false)
         {
             if (!await copy.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
                 return response;
             logger.LogInformation("Job {id} has been moved to queue", job.Id);
         }
-        request.DocumentAttributes ??= new DocumentAttributes();
-        FillWithDefaultValues(request.DocumentAttributes);
+        FillWithDefaultValues(request.OperationAttributes ??= new());
         job.Requests.Add(request);
         logger.LogInformation("Document has been added to job {id}", job.Id);
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
@@ -137,14 +136,13 @@ public class PrinterService(
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
-        if (request.LastDocument)
+        if (request.OperationAttributes?.LastDocument ?? false)
         {
             if (!await copy.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
                 return response;
             logger.LogInformation("Job {id} has been moved to queue", job.Id);
         }
-        request.DocumentAttributes ??= new DocumentAttributes();
-        FillWithDefaultValues(request.DocumentAttributes);
+        FillWithDefaultValues(request.OperationAttributes ??= new());
         job.Requests.Add(request);
         logger.LogInformation("Document has been added to job {id}", job.Id);
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
@@ -236,13 +234,11 @@ public class PrinterService(
             JobState = JobState.Pending,
             StatusCode = IppStatusCode.ClientErrorNotPossible
         };
-        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, dateTimeOffsetProvider.UtcNow);
+        var job = new PrinterJob(GetNextValue(), request.OperationAttributes?.RequestingUserName, dateTimeOffsetProvider.UtcNow);
         response.JobId = job.Id;
         response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
-        request.DocumentAttributes ??= new();
-        FillWithDefaultValues(request.DocumentAttributes);
-        request.NewJobAttributes ??= new();
-        FillWithDefaultValues(job.Id, request.NewJobAttributes);
+        FillWithDefaultValues(job.Id, request.OperationAttributes ??= new());
+        FillWithDefaultValues(request.JobTemplateAttributes ??= new());
         job.Requests.Add(request);
         if (!_jobs.TryAdd(job.Id, job))
             return response;
@@ -289,7 +285,16 @@ public class PrinterService(
     {
         var options = printerOptions.Value;
         var allAttributes = PrinterAttribute.GetAttributes(request.Version).ToList();
-        bool IsRequired(string attributeName) => (request.RequestedAttributes?.Contains(attributeName) ?? true);// && allAttributes.Contains(attributeName);
+        bool IsRequired(string attributeName)
+        {
+            if (request.OperationAttributes is null)
+                return true;
+            if (request.OperationAttributes.RequestedAttributes is null || request.OperationAttributes.RequestedAttributes.Length == 0)
+                return true;
+            if (request.OperationAttributes.RequestedAttributes.All(x => x == string.Empty))
+                return true;
+            return request.OperationAttributes.RequestedAttributes.Contains(attributeName);
+        }
         logger.LogInformation("System returned printer attributes");
         return new GetPrinterAttributesResponse
         {
@@ -394,24 +399,24 @@ public class PrinterService(
     private GetJobsResponse GetGetJobsResponse(GetJobsRequest request)
     {
         IEnumerable<PrinterJob> jobs = _jobs.Values;
-        jobs = request.WhichJobs switch
+        jobs = request.OperationAttributes?.WhichJobs switch
         {
             WhichJobs.Completed => jobs.Where(x => x.State == JobState.Completed || x.State == JobState.Aborted || x.State == JobState.Canceled),
             WhichJobs.NotCompleted => jobs.Where(x => x.State == JobState.Processing || x.State == JobState.Pending),
             _ => jobs.Where(x => x.State.HasValue)
         };
-        if (request.MyJobs ?? false)
-            jobs = jobs.Where(x => x.UserName?.Equals(request.RequestingUserName) ?? false);
+        if (request.OperationAttributes?.MyJobs ?? false)
+            jobs = jobs.Where(x => x.UserName?.Equals(request.OperationAttributes.RequestingUserName) ?? false);
         jobs = jobs.OrderByDescending(x => x.State).ThenByDescending(x => x.Id);
-        if (request.Limit.HasValue)
-            jobs = jobs.Take(request.Limit.Value);
+        if (request.OperationAttributes?.Limit.HasValue ?? false)
+            jobs = jobs.Take(request.OperationAttributes.Limit.Value);
         logger.LogInformation("System returned jobs attributes");
         return new GetJobsResponse
         {
             RequestId = request.RequestId,
             Version = request.Version,
             StatusCode = IppStatusCode.SuccessfulOk,
-            Jobs = jobs.Select(x => GetJobAttributes(x, request.RequestedAttributes, true)).ToArray()
+            Jobs = jobs.Select(x => GetJobDescriptionAttributes(x, request.OperationAttributes?.RequestedAttributes, true)).ToArray()
         };
     }
 
@@ -422,40 +427,64 @@ public class PrinterService(
             RequestId = request.RequestId,
             Version = request.Version,
             StatusCode = IppStatusCode.ClientErrorNotPossible,
-            JobAttributes = new JobAttributes()
+            JobAttributes = new()
         };
         var jobId = GetJobId(request);
         if (!jobId.HasValue)
             return response;
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
-        response.JobAttributes = GetJobAttributes(job, request.RequestedAttributes, false);
+        response.JobAttributes = GetJobDescriptionAttributes(job, request.OperationAttributes?.RequestedAttributes, false);
         response.StatusCode = IppStatusCode.SuccessfulOk;
         logger.LogInformation("System returned job attributes for job {id}", jobId);
         return response;
     }
 
-    private JobAttributes GetJobAttributes(PrinterJob job, string[]? requestedAttributes, bool isBatch)
+    private JobDescriptionAttributes GetJobDescriptionAttributes(PrinterJob job, string[]? requestedAttributes, bool isBatch)
     {
         var jobAttributes = job.Requests.Select(x => x switch
         {
-            CreateJobRequest createJobRequest => createJobRequest.NewJobAttributes,
-            PrintJobRequest printJobRequest => printJobRequest.NewJobAttributes,
-            PrintUriRequest printUriRequest => printUriRequest.NewJobAttributes,
+            CreateJobRequest createJobRequest => createJobRequest.JobTemplateAttributes,
+            PrintJobRequest printJobRequest => printJobRequest.JobTemplateAttributes,
+            PrintUriRequest printUriRequest => printUriRequest.JobTemplateAttributes,
             _ => null,
         }).FirstOrDefault(x => x != null);
-        var documentAttributes = job.Requests.Select(x => x switch
+        var jobName = job.Requests.Select(x => x switch
         {
-            PrintJobRequest printJobRequest => printJobRequest.DocumentAttributes,
-            PrintUriRequest printUriRequest => printUriRequest.DocumentAttributes,
-            SendDocumentRequest sendDocumentRequest => sendDocumentRequest.DocumentAttributes,
-            SendUriRequest sendUriRequest => sendUriRequest.DocumentAttributes,
+            CreateJobRequest createJobRequest => createJobRequest.OperationAttributes?.JobName,
+            PrintJobRequest printJobRequest => printJobRequest.OperationAttributes?.JobName,
+            PrintUriRequest printUriRequest => printUriRequest.OperationAttributes?.JobName,
             _ => null,
         }).FirstOrDefault(x => x != null);
-        bool IsRequired(string attributeName) => (requestedAttributes?.Contains("all") ?? false) || (requestedAttributes?.Contains(attributeName) ?? !isBatch);
-        var attributes = new JobAttributes
+        var ippAttributeFidelity = job.Requests.Select(x => x switch
+        {
+            CreateJobRequest createJobRequest => createJobRequest.OperationAttributes?.IppAttributeFidelity,
+            PrintJobRequest printJobRequest => printJobRequest.OperationAttributes?.IppAttributeFidelity,
+            PrintUriRequest printUriRequest => printUriRequest.OperationAttributes?.IppAttributeFidelity,
+            _ => null,
+        }).FirstOrDefault(x => x != null);
+        var compression = job.Requests.Select(x => x switch
+        {
+            PrintJobRequest printJobRequest => printJobRequest.OperationAttributes?.Compression,
+            PrintUriRequest printUriRequest => printUriRequest.OperationAttributes?.Compression,
+            SendDocumentRequest sendDocumentRequest => sendDocumentRequest.OperationAttributes?.Compression,
+            SendUriRequest sendUriRequest => sendUriRequest.OperationAttributes?.Compression,
+            _ => null,
+        }).FirstOrDefault(x => x != null);
+
+
+        bool IsRequired(string attributeName)
+        {
+            if (requestedAttributes is null || requestedAttributes.Length == 0)
+                return !isBatch;
+            if(requestedAttributes.All(x => x == "all"))
+                return true;
+            return requestedAttributes.Contains(attributeName);
+        }
+        var attributes = new JobDescriptionAttributes
         {
             JobId = job.Id,
+            JobName = !IsRequired(JobAttribute.JobName) ? null : jobName,
             JobUri = $"{GetPrinterUrl()}/{job.Id}",
             JobPrinterUri = !IsRequired(JobAttribute.JobPrinterUri) ? null : GetPrinterUrl(),
             JobState = !IsRequired(JobAttribute.JobState) ? null : job.State,
@@ -466,21 +495,7 @@ public class PrinterService(
             TimeAtProcessing = !IsRequired(JobAttribute.TimeAtProcessing) ? null : job.ProcessingDateTime.HasValue ? (int)(job.ProcessingDateTime.Value - _startTime).TotalSeconds : -1,
             DateTimeAtCompleted = !IsRequired(JobAttribute.DateTimeAtCompleted) ? null : job.CompletedDateTime ?? DateTimeOffset.MinValue,
             TimeAtCompleted = !IsRequired(JobAttribute.TimeAtCompleted) ? null : job.CompletedDateTime.HasValue ? (int)(job.CompletedDateTime.Value - _startTime).TotalSeconds : -1,
-            Compression = !IsRequired(JobAttribute.Compression) ? null : documentAttributes?.Compression,
-            DocumentFormat = !IsRequired(JobAttribute.DocumentFormat) ? null : documentAttributes?.DocumentFormat,
-            DocumentName = !IsRequired(JobAttribute.DocumentName) ? null : documentAttributes?.DocumentName,
-            Copies = !IsRequired(JobAttribute.Copies) ? null : jobAttributes?.Copies,
-            Finishings = !IsRequired(JobAttribute.Finishings) ? null : jobAttributes?.Finishings,
-            IppAttributeFidelity = !IsRequired(JobAttribute.IppAttributeFidelity) ? null : jobAttributes?.IppAttributeFidelity,
-            JobName = !IsRequired(JobAttribute.JobName) ? null : jobAttributes?.JobName,
             JobOriginatingUserName = !IsRequired(JobAttribute.JobOriginatingUserName) ? null : job.UserName,
-            MultipleDocumentHandling = !IsRequired(JobAttribute.MultipleDocumentHandling) ? null : jobAttributes?.MultipleDocumentHandling,
-            NumberUp = !IsRequired(JobAttribute.NumberUp) ? null : jobAttributes?.NumberUp,
-            OrientationRequested = !IsRequired(JobAttribute.OrientationRequested) ? null : jobAttributes?.OrientationRequested,
-            PrinterResolution = !IsRequired(JobAttribute.PrinterResolution) ? null : jobAttributes?.PrinterResolution,
-            Media = !IsRequired(JobAttribute.Media) ? null : jobAttributes?.Media,
-            PrintQuality = !IsRequired(JobAttribute.PrintQuality) ? null : jobAttributes?.PrintQuality,
-            Sides = !IsRequired(JobAttribute.Sides) ? null : jobAttributes?.Sides,
             JobPrinterUpTime = !IsRequired(JobAttribute.JobPrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds
         };
         return attributes;
@@ -506,11 +521,11 @@ public class PrinterService(
             StatusCode = IppStatusCode.ClientErrorNotPossible,
             JobStateReasons = [JobStateReason.None]
         };
-        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, dateTimeOffsetProvider.UtcNow);
+        var job = new PrinterJob(GetNextValue(), request.OperationAttributes?.RequestingUserName, dateTimeOffsetProvider.UtcNow);
         response.JobId = job.Id;
         response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
-        request.NewJobAttributes ??= new();
-        FillWithDefaultValues(job.Id, request.NewJobAttributes);
+        FillWithDefaultValues(job.Id, request.OperationAttributes ??= new());
+        FillWithDefaultValues(request.JobTemplateAttributes ??= new());
         job.Requests.Add(request);
         if (!_jobs.TryAdd(job.Id, job))
             return response;
@@ -592,13 +607,11 @@ public class PrinterService(
             StatusCode = IppStatusCode.ClientErrorNotPossible,
             JobStateReasons = [JobStateReason.None]
         };
-        var job = new PrinterJob(GetNextValue(), request.RequestingUserName, dateTimeOffsetProvider.UtcNow);
+        var job = new PrinterJob(GetNextValue(), request.OperationAttributes?.RequestingUserName, dateTimeOffsetProvider.UtcNow);
         response.JobId = job.Id;
         response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
-        request.NewJobAttributes ??= new();
-        FillWithDefaultValues(job.Id, request.NewJobAttributes);
-        request.DocumentAttributes ??= new();
-        FillWithDefaultValues(request.DocumentAttributes);
+        FillWithDefaultValues(job.Id, request.OperationAttributes ??= new());
+        FillWithDefaultValues(request.JobTemplateAttributes ??= new());
         job.Requests.Add(request);
         if (!await job.TrySetStateAsync(JobState.Pending, dateTimeOffsetProvider.UtcNow))
             return response;
@@ -623,13 +636,17 @@ public class PrinterService(
 
     private static int? GetJobId(IIppJobRequest request)
     {
-        if (request.JobUrl != null && int.TryParse(request.JobUrl.Segments.LastOrDefault(), out int idFromUri))
+        if(request.OperationAttributes is not JobOperationAttributes jobOperationAttributes)
+            return null;
+        if (jobOperationAttributes.JobUri != null && int.TryParse(jobOperationAttributes.JobUri.Segments.LastOrDefault(), out int idFromUri))
             return idFromUri;
-        return request.JobId;
+        return jobOperationAttributes.JobId;
     }
 
-    private void FillWithDefaultValues(int jobId, NewJobAttributes attributes)
+    private void FillWithDefaultValues(JobTemplateAttributes? attributes)
     {
+        if (attributes == null)
+            return;
         var options = printerOptions.Value;
         attributes.PrintScaling ??= options.PrintScaling.FirstOrDefault();
         attributes.Sides ??= options.Sides.FirstOrDefault();
@@ -641,15 +658,33 @@ public class PrinterService(
         attributes.Copies ??= options.Copies;
         attributes.OrientationRequested ??= options.Orientation;
         attributes.JobHoldUntil ??= options.JobHoldUntil;
-        if (string.IsNullOrEmpty(attributes.JobName))
-            attributes.JobName = $"Job {jobId}";
     }
 
-    private void FillWithDefaultValues(DocumentAttributes attributes)
+    private void FillWithDefaultValues(SendDocumentOperationAttributes? attributes)
     {
+        if (attributes is null)
+            return;
         var options = printerOptions.Value;
         if (string.IsNullOrEmpty(attributes.DocumentFormat))
             attributes.DocumentFormat = options.DocumentFormat;
+    }
+
+    private void FillWithDefaultValues(int jobId, PrintJobOperationAttributes? attributes)
+    {
+        if (attributes is null)
+            return;
+        var options = printerOptions.Value;
+        if (string.IsNullOrEmpty(attributes.DocumentFormat))
+            attributes.DocumentFormat = options.DocumentFormat;
+        FillWithDefaultValues(jobId, attributes as CreateJobOperationAttributes);
+    }
+
+    private void FillWithDefaultValues(int jobId, CreateJobOperationAttributes? attributes)
+    {
+        if (attributes is null)
+            return;
+        if (string.IsNullOrEmpty(attributes.JobName))
+            attributes.JobName = $"Job {jobId}";
     }
 
     public async ValueTask DisposeAsync()
