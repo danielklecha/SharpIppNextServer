@@ -17,4 +17,5 @@ public class PrinterOptions
     public JobHoldUntil JobHoldUntil { get; set; } = JobHoldUntil.NoHold;
     public string DocumentFormat { get; set; } = "application/pdf";
     public string[] OutputBin { get; set; } = ["top"];
+    public PrintColorMode[] PrintColorModes { get; set; } = [PrintColorMode.Color];
 }

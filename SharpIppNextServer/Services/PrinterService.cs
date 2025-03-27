@@ -386,7 +386,9 @@ public class PrinterService(
                 MediaHoleCount = 0,
                 MediaInfo = "my black color",
                 MediaOrderCount = 1
-            }
+            },
+            PrintColorModeDefault = options.PrintColorModes.FirstOrDefault(),
+            PrintColorModeSupported = options.PrintColorModes
         };
     }
 
@@ -658,6 +660,7 @@ public class PrinterService(
         attributes.Copies ??= options.Copies;
         attributes.OrientationRequested ??= options.Orientation;
         attributes.JobHoldUntil ??= options.JobHoldUntil;
+        attributes.PrintColorMode ??= options.PrintColorModes.FirstOrDefault();
     }
 
     private void FillWithDefaultValues(SendDocumentOperationAttributes? attributes)
