@@ -32,28 +32,10 @@ public class PrinterService(
         try
         {
             IIppRequest request = await sharpIppServer.ReceiveRequestAsync(inputStream);
-            IIppResponseMessage response = request switch
-            {
-                CancelJobRequest x => await GetCancelJobResponseAsync(x),
-                CreateJobRequest x => GetCreateJobResponse(x),
-                CUPSGetPrintersRequest x => GetCUPSGetPrintersResponse(x),
-                GetJobAttributesRequest x => GetGetJobAttributesResponse(x),
-                GetJobsRequest x => GetGetJobsResponse(x),
-                GetPrinterAttributesRequest x => GetGetPrinterAttributesResponse(x),
-                HoldJobRequest x => await GetHoldJobResponseAsync(x),
-                PausePrinterRequest x => GetPausePrinterResponse(x),
-                PrintJobRequest x => await GetPrintJobResponseAsync(x),
-                PrintUriRequest x => GetPrintUriResponse(x),
-                PurgeJobsRequest x => await GetPurgeJobsResponseAsync(x),
-                ReleaseJobRequest x => await GetReleaseJobResponseAsync(x),
-                RestartJobRequest x => await GetRestartJobResponseAsync(x),
-                ResumePrinterRequest x => GetResumePrinterResponse(x),
-                SendDocumentRequest x => await GetSendDocumentResponseAsync(x),
-                SendUriRequest x => await GetSendUriResponseAsync(x),
-                ValidateJobRequest x => GetValidateJobResponse(x),
-                _ => throw new NotImplementedException()
-            };
-            await sharpIppServer.SendResponseAsync(response, outputStream);
+            IIppResponseMessage response = await GetResponseAsync(request);
+            IIppResponseMessage rawResponse = await sharpIppServer.CreateRawResponseAsync(response);
+            ImproveRawResponse(request, rawResponse);
+            await sharpIppServer.SendRawResponseAsync(response, outputStream);
         }
         catch (IppRequestException ex)
         {
@@ -75,6 +57,61 @@ public class PrinterService(
             logger.LogError(ex, "Unable to process request");
             if (httpContextAccessor.HttpContext != null)
                 httpContextAccessor.HttpContext.Response.StatusCode = 500;
+        }
+    }
+
+    private async Task<IIppResponseMessage> GetResponseAsync(IIppRequest request)
+    {
+        return request switch
+        {
+            CancelJobRequest x => await GetCancelJobResponseAsync(x),
+            CreateJobRequest x => GetCreateJobResponse(x),
+            CUPSGetPrintersRequest x => GetCUPSGetPrintersResponse(x),
+            GetJobAttributesRequest x => GetGetJobAttributesResponse(x),
+            GetJobsRequest x => GetGetJobsResponse(x),
+            GetPrinterAttributesRequest x => GetGetPrinterAttributesResponse(x),
+            HoldJobRequest x => await GetHoldJobResponseAsync(x),
+            PausePrinterRequest x => GetPausePrinterResponse(x),
+            PrintJobRequest x => await GetPrintJobResponseAsync(x),
+            PrintUriRequest x => GetPrintUriResponse(x),
+            PurgeJobsRequest x => await GetPurgeJobsResponseAsync(x),
+            ReleaseJobRequest x => await GetReleaseJobResponseAsync(x),
+            RestartJobRequest x => await GetRestartJobResponseAsync(x),
+            ResumePrinterRequest x => GetResumePrinterResponse(x),
+            SendDocumentRequest x => await GetSendDocumentResponseAsync(x),
+            SendUriRequest x => await GetSendUriResponseAsync(x),
+            ValidateJobRequest x => GetValidateJobResponse(x),
+            _ => throw new NotImplementedException()
+        };
+    }
+
+    private void ImproveRawResponse(IIppRequest request, IIppResponseMessage rawResponse)
+    {
+        switch(request)
+        {
+            case GetPrinterAttributesRequest x:
+                ImproveGetPrinterAttributesRawResponse(x, rawResponse);
+                break;
+        }
+    }
+
+    private void ImproveGetPrinterAttributesRawResponse(GetPrinterAttributesRequest request, IIppResponseMessage rawResponse)
+    {
+        if (request.OperationAttributes is null
+            || request.OperationAttributes.RequestedAttributes is null || request.OperationAttributes.RequestedAttributes.Length == 0
+            || request.OperationAttributes.RequestedAttributes.All(x => x == string.Empty)
+            || request.OperationAttributes.RequestedAttributes.Any(x => x == "all"))
+            return;
+        var section = rawResponse.Sections.FirstOrDefault(x => x.Tag == SectionTag.PrinterAttributesTag);
+        if(section is null)
+            return;
+        foreach (var attributeName in request.OperationAttributes.RequestedAttributes.Where(x => !string.IsNullOrEmpty(x)))
+        {
+            var attribute = section.Attributes.FirstOrDefault(x => x.Name == attributeName);
+            if (attribute is not null)
+                continue;
+            section.Attributes.Add(new IppAttribute(Tag.NoValue, attributeName, NoValue.Instance));
+            logger.LogDebug("{name} attribute has been added with no value.", attributeName);
         }
     }
 
@@ -287,14 +324,14 @@ public class PrinterService(
         var allAttributes = PrinterAttribute.GetAttributes(request.Version).ToList();
         bool IsRequired(string attributeName)
         {
-            if (request.OperationAttributes is null)
-                return true;
-            if (request.OperationAttributes.RequestedAttributes is null || request.OperationAttributes.RequestedAttributes.Length == 0)
-                return true;
-            if (request.OperationAttributes.RequestedAttributes.All(x => x == string.Empty))
-                return true;
-            return request.OperationAttributes.RequestedAttributes.Contains(attributeName);
-        }
+        if (request.OperationAttributes is null)
+            return true;
+        if (request.OperationAttributes.RequestedAttributes is null || request.OperationAttributes.RequestedAttributes.Length == 0)
+            return true;
+        if (request.OperationAttributes.RequestedAttributes.All(x => x == string.Empty))
+            return true;
+        return request.OperationAttributes.RequestedAttributes.Contains(attributeName);
+    }
         logger.LogInformation("System returned printer attributes");
         return new GetPrinterAttributesResponse
         {

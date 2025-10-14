@@ -33,7 +33,6 @@ var printerOptions = app.Services.GetRequiredService<IOptions<PrinterOptions>>()
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseCors(x => x.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
-app.MapGet("/", () => "IPP printer");
 new List<string>
 {
     "/",
@@ -41,15 +40,14 @@ new List<string>
     $"/{printerOptions.Name}",
     "/ipp/printer",
     $"/ipp/printer/{printerOptions.Name}"
-}.ForEach(path => app.MapPost(path, async (HttpContext context, PrinterService printerService) =>
+}.ForEach(path =>
 {
-    context.Response.ContentType = "application/ipp";
-    await printerService.ProcessRequestAsync(context.Request.Body, context.Response.Body);
-}));
-/*
-app.MapMethods("/{**catchAll}", new[] { "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD", "TRACE" }, async context =>
-{
-    await context.Response.WriteAsync("OK");
+    app.MapGet(path, () => "IPP printer");
+    app.MapPost(path, async (HttpContext context, PrinterService printerService) =>
+    {
+        context.Response.ContentType = "application/ipp";
+        await printerService.ProcessRequestAsync(context.Request.Body, context.Response.Body);
+    });
 });
-*/
+
 app.Run();
