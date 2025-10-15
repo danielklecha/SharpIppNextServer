@@ -424,8 +424,8 @@ public class PrinterService(
                 MediaInfo = "my black color",
                 MediaOrderCount = 1
             },
-            PrintColorModeDefault = options.PrintColorModes.FirstOrDefault(),
-            PrintColorModeSupported = options.PrintColorModes
+            PrintColorModeDefault = !IsRequired(PrinterAttribute.PrintColorModeDefault) ? null : options.PrintColorModes.FirstOrDefault(),
+            PrintColorModeSupported = !IsRequired(PrinterAttribute.PrintColorModeSupported) ? null : options.PrintColorModes
         };
     }
 
