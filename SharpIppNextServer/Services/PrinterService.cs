@@ -6,6 +6,7 @@ using SharpIpp.Models;
 using Microsoft.Extensions.Options;
 using SharpIpp.Exceptions;
 using SharpIppNextServer.Models;
+using System.Text;
 
 namespace SharpIppNextServer.Services;
 
@@ -35,7 +36,7 @@ public class PrinterService(
             IIppResponseMessage response = await GetResponseAsync(request);
             IIppResponseMessage rawResponse = await sharpIppServer.CreateRawResponseAsync(response);
             ImproveRawResponse(request, rawResponse);
-            await sharpIppServer.SendRawResponseAsync(response, outputStream);
+            await sharpIppServer.SendRawResponseAsync(rawResponse, outputStream);
         }
         catch (IppRequestException ex)
         {
@@ -97,22 +98,24 @@ public class PrinterService(
 
     private void ImproveGetPrinterAttributesRawResponse(GetPrinterAttributesRequest request, IIppResponseMessage rawResponse)
     {
-        if (request.OperationAttributes is null
-            || request.OperationAttributes.RequestedAttributes is null || request.OperationAttributes.RequestedAttributes.Length == 0
-            || request.OperationAttributes.RequestedAttributes.All(x => x == string.Empty)
-            || request.OperationAttributes.RequestedAttributes.Any(x => x == "all"))
-            return;
         var section = rawResponse.Sections.FirstOrDefault(x => x.Tag == SectionTag.PrinterAttributesTag);
         if(section is null)
             return;
-        foreach (var attributeName in request.OperationAttributes.RequestedAttributes.Where(x => !string.IsNullOrEmpty(x)))
-        {
-            var attribute = section.Attributes.FirstOrDefault(x => x.Name == attributeName);
-            if (attribute is not null)
-                continue;
-            section.Attributes.Add(new IppAttribute(Tag.NoValue, attributeName, NoValue.Instance));
-            logger.LogDebug("{name} attribute has been added with no value.", attributeName);
-        }
+        bool IsRequired(string attributeName) => !section.Attributes.Any(x => x.Name.Equals(attributeName))
+            && IsAttributeRequired(request, attributeName);
+        var options = printerOptions.Value;
+        if(IsRequired("printer-device-id"))
+            section.Attributes.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-device-id", GetPrinterDeviceId()));
+        if(IsRequired("printer-uuid"))
+            section.Attributes.Add(new IppAttribute(Tag.Uri, "printer-uuid", $"urn:uuid:{options.UUID}"));
+        if(IsRequired("printer-dns-sd-name"))
+            section.Attributes.Add(new IppAttribute(Tag.NameWithoutLanguage, "printer-dns-sd-name", options.DnsSdName));
+        if(IsRequired("printer-make-and-model"))
+            section.Attributes.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-make-and-model", options.Name));
+        if(IsRequired("printer-firmware-name"))
+            section.Attributes.Add(new IppAttribute(Tag.NameWithoutLanguage, "printer-firmware-name", options.FirmwareName));
+        if(IsRequired("printer-firmware-string-version"))
+            section.Attributes.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-firmware-string-version", options.FirmwareName));
     }
 
     private ValidateJobResponse GetValidateJobResponse(ValidateJobRequest request)
@@ -124,6 +127,22 @@ public class PrinterService(
             Version = request.Version,
             StatusCode = IppStatusCode.SuccessfulOk
         };
+    }
+
+    private static string GetPrinterDeviceId()
+    {
+        return new StringBuilder()
+            .Append("MFG:danielklecha;") //Manufacturer
+            .Append("MDL:SharpIppNext1;") //Model
+            .Append("CMD:Automatic,JPEG;") //Command Set
+            .Append("CLS:PRINTER") //Class
+            .Append("DES:SIN1;") //Designator or Description
+            .Append("CID:SharpIppNext_1;") //Compatible ID
+            .Append("LEDMDIS:USB#FF#CC#00,USB#07#01#02,USB#FF#04#01;") //Legacy Device ID String
+            .Append("SN:SIN279BJ23J07PX;") //Serial Number
+            .Append("S:038000C480a00001002c240005ac1400032;") //Status
+            .Append("Z:05000008000009,12000,17000000000000,181;") //Vendor-Specific
+            .ToString();
     }
 
     private async Task<SendUriResponse> GetSendUriResponseAsync(SendUriRequest request)
@@ -318,20 +337,21 @@ public class PrinterService(
         return response;
     }
 
+    private static bool IsAttributeRequired(GetPrinterAttributesRequest request, string attributeName)
+    {
+        return request.OperationAttributes is null
+                || request.OperationAttributes.RequestedAttributes is null
+                || request.OperationAttributes.RequestedAttributes.Length == 0
+                || request.OperationAttributes.RequestedAttributes.All(x => x == string.Empty)
+                || request.OperationAttributes.RequestedAttributes.Any(x => x.Equals("all", StringComparison.InvariantCultureIgnoreCase))
+                || request.OperationAttributes.RequestedAttributes.Contains(attributeName);
+    }
+
     private GetPrinterAttributesResponse GetGetPrinterAttributesResponse(GetPrinterAttributesRequest request)
     {
         var options = printerOptions.Value;
         var allAttributes = PrinterAttribute.GetAttributes(request.Version).ToList();
-        bool IsRequired(string attributeName)
-        {
-        if (request.OperationAttributes is null)
-            return true;
-        if (request.OperationAttributes.RequestedAttributes is null || request.OperationAttributes.RequestedAttributes.Length == 0)
-            return true;
-        if (request.OperationAttributes.RequestedAttributes.All(x => x == string.Empty))
-            return true;
-        return request.OperationAttributes.RequestedAttributes.Contains(attributeName);
-    }
+        bool IsRequired(string attributeName) => IsAttributeRequired(request, attributeName);
         logger.LogInformation("System returned printer attributes");
         return new GetPrinterAttributesResponse
         {
@@ -379,7 +399,7 @@ public class PrinterService(
             PrinterLocation = !IsRequired(PrinterAttribute.PrinterLocation) ? null : "Internet",
             PrintScalingDefault = !IsRequired(PrinterAttribute.PrintScalingDefault) ? null : options.PrintScaling.FirstOrDefault(),
             PrintScalingSupported = !IsRequired(PrinterAttribute.PrintScalingSupported) ? null : options.PrintScaling,
-            PrinterUriSupported = !IsRequired(PrinterAttribute.PrinterUriSupported) ? null : [GetPrinterUrl()],
+            PrinterUriSupported = !IsRequired(PrinterAttribute.PrinterUriSupported) ? null : [GetPrinterUrl("/ipp/print")],
             UriAuthenticationSupported = !IsRequired(PrinterAttribute.UriAuthenticationSupported) ? null : [UriAuthentication.None],
             UriSecuritySupported = !IsRequired(PrinterAttribute.UriSecuritySupported) ? null : [GetUriSecuritySupported()],
             PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds,
@@ -661,10 +681,10 @@ public class PrinterService(
         return response;
     }
 
-    private string GetPrinterUrl()
+    private string GetPrinterUrl(string? path = null)
     {
         var request = httpContextAccessor.HttpContext?.Request ?? throw new Exception("Unable to access HttpContext");
-        return $"ipp://{request.Host}{request.PathBase}{request.Path}";
+        return $"ipp://{request.Host}{request.PathBase}{(path is null ? request.Path : path)}";
     }
 
     private string GetPrinterMoreInfo()
