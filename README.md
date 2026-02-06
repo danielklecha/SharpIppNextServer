@@ -11,17 +11,15 @@ The printer should be compatible with any IPP client.
 
 ### Windows (Printer wizard)
 
-1. Open "printers & scanners"
-2. Click "Add device"
-3. Click "Add a new device manually"
-4. Select "Select a shared printer by name" and use url http://127.0.0.1:631/SharpIppNext
-5. Click "Next"
-6. Click "Windows Update" if you don't see printer from next point. Process could teke few minutes. 
-6. Select "Microsoft" as "Manufacturer and "Microsoft Print to PDF" as printer.
-7. Click "OK"
-8. Click "Next"
-9. Click "Print a  test page" (optionally)
-10. Click "Finish"
+1. Open `Printers & scanners`
+2. Click `Add device`
+3. Click `Add a new device manually`
+4. Select `Add a printer using an IP address or hostname`
+5. Select `IPP Device` as device type
+6. Write `http://127.0.0.1:631/` or `https://127.0.0.1:631/` as `Hostname or IP address`
+7. Click `Next` - You should successfully add printer.
+8. Click "Print a  test page" (optionally)
+9. Click `Finish`.
 
 ### Windows (Script)
 
