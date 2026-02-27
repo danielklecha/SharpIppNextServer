@@ -7,6 +7,8 @@ using Microsoft.Extensions.Options;
 using SharpIpp.Exceptions;
 using SharpIppNextServer.Models;
 using System.Text;
+using SharpIpp.Models.Requests;
+using SharpIpp.Models.Responses;
 
 namespace SharpIppNextServer.Services;
 
@@ -33,7 +35,7 @@ public class PrinterService(
         try
         {
             IIppRequest request = await sharpIppServer.ReceiveRequestAsync(inputStream);
-            IIppResponseMessage response = await GetResponseAsync(request);
+            IIppResponse response = await GetResponseAsync(request);
             IIppResponseMessage rawResponse = await sharpIppServer.CreateRawResponseAsync(response);
             ImproveRawResponse(request, rawResponse);
             await sharpIppServer.SendRawResponseAsync(rawResponse, outputStream);
@@ -47,10 +49,9 @@ public class PrinterService(
                 Version = ex.RequestMessage.Version,
                 StatusCode = ex.StatusCode
             };
-            var operation = new IppSection { Tag = SectionTag.OperationAttributesTag };
-            operation.Attributes.Add(new IppAttribute(Tag.Charset, JobAttribute.AttributesCharset, "utf-8"));
-            operation.Attributes.Add(new IppAttribute(Tag.NaturalLanguage, JobAttribute.AttributesNaturalLanguage, "en"));
-            response.Sections.Add(operation);
+            response.OperationAttributes.Add([
+                new IppAttribute(Tag.Charset, JobAttribute.AttributesCharset, "utf-8"),
+                new IppAttribute(Tag.NaturalLanguage, JobAttribute.AttributesNaturalLanguage, "en")]);
             await sharpIppServer.SendRawResponseAsync(response, outputStream);
         }
         catch (Exception ex)
@@ -61,7 +62,7 @@ public class PrinterService(
         }
     }
 
-    private async Task<IIppResponseMessage> GetResponseAsync(IIppRequest request)
+    private async Task<IIppResponse> GetResponseAsync(IIppRequest request)
     {
         return request switch
         {
@@ -98,24 +99,24 @@ public class PrinterService(
 
     private void ImproveGetPrinterAttributesRawResponse(GetPrinterAttributesRequest request, IIppResponseMessage rawResponse)
     {
-        var section = rawResponse.Sections.FirstOrDefault(x => x.Tag == SectionTag.PrinterAttributesTag);
-        if(section is null)
+        var list = rawResponse.PrinterAttributes.FirstOrDefault();
+        if(list is null)
             return;
-        bool IsRequired(string attributeName) => !section.Attributes.Any(x => x.Name.Equals(attributeName))
+        bool IsRequired(string attributeName) => !list.Any(x => x.Name.Equals(attributeName))
             && IsAttributeRequired(request, attributeName);
         var options = printerOptions.Value;
         if(IsRequired("printer-device-id"))
-            section.Attributes.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-device-id", GetPrinterDeviceId()));
+            list.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-device-id", GetPrinterDeviceId()));
         if(IsRequired("printer-uuid"))
-            section.Attributes.Add(new IppAttribute(Tag.Uri, "printer-uuid", $"urn:uuid:{options.UUID}"));
+            list.Add(new IppAttribute(Tag.Uri, "printer-uuid", $"urn:uuid:{options.UUID}"));
         if(IsRequired("printer-dns-sd-name"))
-            section.Attributes.Add(new IppAttribute(Tag.NameWithoutLanguage, "printer-dns-sd-name", options.DnsSdName));
+            list.Add(new IppAttribute(Tag.NameWithoutLanguage, "printer-dns-sd-name", options.DnsSdName));
         if(IsRequired("printer-make-and-model"))
-            section.Attributes.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-make-and-model", options.Name));
+            list.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-make-and-model", options.Name));
         if(IsRequired("printer-firmware-name"))
-            section.Attributes.Add(new IppAttribute(Tag.NameWithoutLanguage, "printer-firmware-name", options.FirmwareName));
+            list.Add(new IppAttribute(Tag.NameWithoutLanguage, "printer-firmware-name", options.FirmwareName));
         if(IsRequired("printer-firmware-string-version"))
-            section.Attributes.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-firmware-string-version", options.FirmwareName));
+            list.Add(new IppAttribute(Tag.TextWithoutLanguage, "printer-firmware-string-version", options.FirmwareName));
     }
 
     private ValidateJobResponse GetValidateJobResponse(ValidateJobRequest request)
@@ -151,13 +152,14 @@ public class PrinterService(
         {
             RequestId = request.RequestId,
             Version = request.Version,
-            StatusCode = IppStatusCode.ClientErrorNotPossible
+            StatusCode = IppStatusCode.ClientErrorNotPossible,
+            JobAttributes = new()
         };
         var jobId = GetJobId(request);
         if (!jobId.HasValue)
             return response;
-        response.JobId = jobId.Value;
-        response.JobUri = $"{GetPrinterUrl()}/{jobId.Value}";
+        response.JobAttributes.JobId = jobId.Value;
+        response.JobAttributes.JobUri = $"{GetPrinterUrl()}/{jobId.Value}";
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
@@ -182,13 +184,14 @@ public class PrinterService(
         {
             RequestId = request.RequestId,
             Version = request.Version,
-            StatusCode = IppStatusCode.ClientErrorNotPossible
+            StatusCode = IppStatusCode.ClientErrorNotPossible,
+            JobAttributes = new()
         };
         var jobId = GetJobId(request);
         if (!jobId.HasValue)
             return response;
-        response.JobId = jobId.Value;
-        response.JobUri = $"{GetPrinterUrl()}/{jobId.Value}";
+        response.JobAttributes.JobId = jobId.Value;
+        response.JobAttributes.JobUri = $"{GetPrinterUrl()}/{jobId.Value}";
         if (!_jobs.TryGetValue(jobId.Value, out var job))
             return response;
         var copy = new PrinterJob(job);
@@ -203,7 +206,7 @@ public class PrinterService(
         logger.LogInformation("Document has been added to job {id}", job.Id);
         if (!_jobs.TryUpdate(jobId.Value, copy, job))
             return response;
-        response.JobState = JobState.Pending;
+        response.JobAttributes.JobState = JobState.Pending;
         response.StatusCode = IppStatusCode.SuccessfulOk;
         return response;
     }
@@ -287,12 +290,15 @@ public class PrinterService(
         {
             RequestId = request.RequestId,
             Version = request.Version,
-            JobState = JobState.Pending,
-            StatusCode = IppStatusCode.ClientErrorNotPossible
+            StatusCode = IppStatusCode.ClientErrorNotPossible,
+            JobAttributes = new()
+            {
+                JobState = JobState.Pending
+            }
         };
         var job = new PrinterJob(GetNextValue(), request.OperationAttributes?.RequestingUserName, dateTimeOffsetProvider.UtcNow);
-        response.JobId = job.Id;
-        response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
+        response.JobAttributes.JobId = job.Id;
+        response.JobAttributes.JobUri = $"{GetPrinterUrl()}/{job.Id}";
         FillWithDefaultValues(job.Id, request.OperationAttributes ??= new());
         FillWithDefaultValues(request.JobTemplateAttributes ??= new());
         job.Requests.Add(request);
@@ -350,7 +356,6 @@ public class PrinterService(
     private GetPrinterAttributesResponse GetGetPrinterAttributesResponse(GetPrinterAttributesRequest request)
     {
         var options = printerOptions.Value;
-        var allAttributes = PrinterAttribute.GetAttributes(request.Version).ToList();
         bool IsRequired(string attributeName) => IsAttributeRequired(request, attributeName);
         logger.LogInformation("System returned printer attributes");
         return new GetPrinterAttributesResponse
@@ -358,94 +363,97 @@ public class PrinterService(
             RequestId = request.RequestId,
             Version = request.Version,
             StatusCode = IppStatusCode.SuccessfulOk,
-            PrinterState = !IsRequired(PrinterAttribute.PrinterState)
+            PrinterAttributes = new()
+            {
+                PrinterState = !IsRequired(PrinterAttribute.PrinterState)
                 ? null
                 : _jobs.Values.Any(x => x.State == JobState.Pending || x.State == JobState.Processing) ? PrinterState.Processing : PrinterState.Idle,
-            PrinterStateReasons = !IsRequired(PrinterAttribute.PrinterStateReasons) ? null : ["none"],
-            CharsetConfigured = !IsRequired(PrinterAttribute.CharsetConfigured) ? null : "utf-8",
-            CharsetSupported = !IsRequired(PrinterAttribute.CharsetSupported) ? null : ["utf-8"],
-            NaturalLanguageConfigured = !IsRequired(PrinterAttribute.NaturalLanguageConfigured) ? null : "en-us",
-            GeneratedNaturalLanguageSupported = !IsRequired(PrinterAttribute.GeneratedNaturalLanguageSupported) ? null : ["en-us"],
-            PrinterIsAcceptingJobs = !IsRequired(PrinterAttribute.PrinterIsAcceptingJobs) ? null : true,
-            PrinterMakeAndModel = !IsRequired(PrinterAttribute.PrinterMakeAndModel) ? null : options.Name,
-            PrinterName = !IsRequired(PrinterAttribute.PrinterName) ? null : options.Name,
-            PrinterInfo = !IsRequired(PrinterAttribute.PrinterInfo) ? null : options.Name,
-            IppVersionsSupported = !IsRequired(PrinterAttribute.IppVersionsSupported) ? null : [new IppVersion(1, 0), IppVersion.V1_1, new IppVersion(2, 0)],
-            DocumentFormatDefault = !IsRequired(PrinterAttribute.DocumentFormatDefault) ? null : options.DocumentFormat,
-            ColorSupported = !IsRequired(PrinterAttribute.ColorSupported) ? null : true,
-            PrinterCurrentTime = !IsRequired(PrinterAttribute.PrinterCurrentTime) ? null : dateTimeOffsetProvider.Now,
-            OperationsSupported = !IsRequired(PrinterAttribute.OperationsSupported) ? null :
-            [
-                IppOperation.PrintJob,
-                IppOperation.PrintUri,
-                IppOperation.ValidateJob,
-                IppOperation.CreateJob,
-                IppOperation.SendDocument,
-                IppOperation.SendUri,
-                IppOperation.CancelJob,
-                IppOperation.GetJobAttributes,
-                IppOperation.GetJobs,
-                IppOperation.GetPrinterAttributes,
-                IppOperation.HoldJob,
-                IppOperation.ReleaseJob,
-                IppOperation.RestartJob,
-                IppOperation.PausePrinter,
-                IppOperation.ResumePrinter
-            ],
-            QueuedJobCount = !IsRequired(PrinterAttribute.QueuedJobCount) ? null : _jobs.Values.Where(x => x.State == JobState.Pending || x.State == JobState.Processing).Count(),
-            DocumentFormatSupported = !IsRequired(PrinterAttribute.DocumentFormatSupported) ? null : [options.DocumentFormat],
-            MultipleDocumentJobsSupported = !IsRequired(PrinterAttribute.MultipleDocumentJobsSupported) ? null : true,
-            CompressionSupported = !IsRequired(PrinterAttribute.CompressionSupported) ? null : [Compression.None],
-            PrinterLocation = !IsRequired(PrinterAttribute.PrinterLocation) ? null : "Internet",
-            PrintScalingDefault = !IsRequired(PrinterAttribute.PrintScalingDefault) ? null : options.PrintScaling.FirstOrDefault(),
-            PrintScalingSupported = !IsRequired(PrinterAttribute.PrintScalingSupported) ? null : options.PrintScaling,
-            PrinterUriSupported = !IsRequired(PrinterAttribute.PrinterUriSupported) ? null : [GetPrinterUrl("/ipp/print")],
-            UriAuthenticationSupported = !IsRequired(PrinterAttribute.UriAuthenticationSupported) ? null : [UriAuthentication.None],
-            UriSecuritySupported = !IsRequired(PrinterAttribute.UriSecuritySupported) ? null : [GetUriSecuritySupported()],
-            PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds,
-            MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media.FirstOrDefault(),
-            MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : options.Media,
-            SidesDefault = !IsRequired(PrinterAttribute.SidesDefault) ? null : options.Sides.FirstOrDefault(),
-            SidesSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : Enum.GetValues(typeof(Sides)).Cast<Sides>().Where(x => x != Sides.Unsupported).ToArray(),
-            PdlOverrideSupported = !IsRequired(PrinterAttribute.PdlOverrideSupported) ? null : "attempted",
-            MultipleOperationTimeOut = !IsRequired(PrinterAttribute.MultipleOperationTimeOut) ? null : 120,
-            FinishingsDefault = !IsRequired(PrinterAttribute.FinishingsDefault) ? null : options.Finishings.FirstOrDefault(),
-            FinishingsSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : options.Finishings,
-            PrinterResolutionDefault = !IsRequired(PrinterAttribute.PrinterResolutionDefault) ? null : options.Resolution.FirstOrDefault(),
-            PrinterResolutionSupported = !IsRequired(PrinterAttribute.PrinterResolutionSupported) ? null : [options.Resolution.FirstOrDefault()],
-            PrintQualityDefault = !IsRequired(PrinterAttribute.PrintQualityDefault) ? null : options.PrintQuality.FirstOrDefault(),
-            PrintQualitySupported = !IsRequired(PrinterAttribute.PrintQualitySupported) ? null : options.PrintQuality,
-            JobPriorityDefault = !IsRequired(PrinterAttribute.JobPriorityDefault) ? null : options.JobPriority,
-            JobPrioritySupported = !IsRequired(PrinterAttribute.JobPrioritySupported) ? null : options.JobPriority,
-            CopiesDefault = !IsRequired(PrinterAttribute.CopiesDefault) ? null : options.Copies,
-            CopiesSupported = !IsRequired(PrinterAttribute.CopiesSupported) ? null : new SharpIpp.Protocol.Models.Range(options.Copies, options.Copies),
-            OrientationRequestedDefault = !IsRequired(PrinterAttribute.OrientationRequestedDefault) ? null : options.Orientation,
-            OrientationRequestedSupported = !IsRequired(PrinterAttribute.OrientationRequestedSupported) ? null : Enum.GetValues(typeof(Orientation)).Cast<Orientation>().Where(x => x != Orientation.Unsupported).ToArray(),
-            PageRangesSupported = !IsRequired(PrinterAttribute.PageRangesSupported) ? null : false,
-            PagesPerMinute = !IsRequired(PrinterAttribute.PagesPerMinute) ? null : 20,
-            PagesPerMinuteColor = !IsRequired(PrinterAttribute.PagesPerMinuteColor) ? null : 20,
-            PrinterMoreInfo = !IsRequired(PrinterAttribute.PrinterMoreInfo) ? null : GetPrinterMoreInfo(),
-            JobHoldUntilSupported = !IsRequired(PrinterAttribute.JobHoldUntilSupported) ? null : [JobHoldUntil.NoHold],
-            JobHoldUntilDefault = !IsRequired(PrinterAttribute.JobHoldUntilDefault) ? null : JobHoldUntil.NoHold,
-            ReferenceUriSchemesSupported = !IsRequired(PrinterAttribute.ReferenceUriSchemesSupported) ? null : [UriScheme.Ftp, UriScheme.Http, UriScheme.Https],
-            OutputBinDefault = !IsRequired(PrinterAttribute.OutputBinDefault) ? null : options.OutputBin.FirstOrDefault(),
-            OutputBinSupported = !IsRequired(PrinterAttribute.OutputBinSupported) ? null : options.OutputBin,
-            MediaColDefault = !IsRequired(PrinterAttribute.MediaColDefault) ? null : new MediaCol
-            {
-                MediaBackCoating = MediaCoating.None,
-                MediaBottomMargin = 10,
-                MediaColor = "black",
-                MediaLeftMargin = 10,
-                MediaRightMargin = 10,
-                MediaTopMargin = 10,
-                MediaFrontCoating = MediaCoating.None,
-                MediaGrain = MediaGrain.XDirection,
-                MediaHoleCount = 0,
-                MediaInfo = "my black color",
-                MediaOrderCount = 1
-            },
-            PrintColorModeDefault = !IsRequired(PrinterAttribute.PrintColorModeDefault) ? null : options.PrintColorModes.FirstOrDefault(),
-            PrintColorModeSupported = !IsRequired(PrinterAttribute.PrintColorModeSupported) ? null : options.PrintColorModes
+                PrinterStateReasons = !IsRequired(PrinterAttribute.PrinterStateReasons) ? null : ["none"],
+                CharsetConfigured = !IsRequired(PrinterAttribute.CharsetConfigured) ? null : "utf-8",
+                CharsetSupported = !IsRequired(PrinterAttribute.CharsetSupported) ? null : ["utf-8"],
+                NaturalLanguageConfigured = !IsRequired(PrinterAttribute.NaturalLanguageConfigured) ? null : "en-us",
+                GeneratedNaturalLanguageSupported = !IsRequired(PrinterAttribute.GeneratedNaturalLanguageSupported) ? null : ["en-us"],
+                PrinterIsAcceptingJobs = !IsRequired(PrinterAttribute.PrinterIsAcceptingJobs) ? null : true,
+                PrinterMakeAndModel = !IsRequired(PrinterAttribute.PrinterMakeAndModel) ? null : options.Name,
+                PrinterName = !IsRequired(PrinterAttribute.PrinterName) ? null : options.Name,
+                PrinterInfo = !IsRequired(PrinterAttribute.PrinterInfo) ? null : options.Name,
+                IppVersionsSupported = !IsRequired(PrinterAttribute.IppVersionsSupported) ? null : [new IppVersion(1, 0), new IppVersion(1, 1), new IppVersion(2, 0)],
+                DocumentFormatDefault = !IsRequired(PrinterAttribute.DocumentFormatDefault) ? null : options.DocumentFormat,
+                ColorSupported = !IsRequired(PrinterAttribute.ColorSupported) ? null : true,
+                PrinterCurrentTime = !IsRequired(PrinterAttribute.PrinterCurrentTime) ? null : dateTimeOffsetProvider.Now,
+                OperationsSupported = !IsRequired(PrinterAttribute.OperationsSupported) ? null :
+                [
+                    IppOperation.PrintJob,
+                    IppOperation.PrintUri,
+                    IppOperation.ValidateJob,
+                    IppOperation.CreateJob,
+                    IppOperation.SendDocument,
+                    IppOperation.SendUri,
+                    IppOperation.CancelJob,
+                    IppOperation.GetJobAttributes,
+                    IppOperation.GetJobs,
+                    IppOperation.GetPrinterAttributes,
+                    IppOperation.HoldJob,
+                    IppOperation.ReleaseJob,
+                    IppOperation.RestartJob,
+                    IppOperation.PausePrinter,
+                    IppOperation.ResumePrinter
+                ],
+                QueuedJobCount = !IsRequired(PrinterAttribute.QueuedJobCount) ? null : _jobs.Values.Where(x => x.State == JobState.Pending || x.State == JobState.Processing).Count(),
+                DocumentFormatSupported = !IsRequired(PrinterAttribute.DocumentFormatSupported) ? null : [options.DocumentFormat],
+                MultipleDocumentJobsSupported = !IsRequired(PrinterAttribute.MultipleDocumentJobsSupported) ? null : true,
+                CompressionSupported = !IsRequired(PrinterAttribute.CompressionSupported) ? null : [Compression.None],
+                PrinterLocation = !IsRequired(PrinterAttribute.PrinterLocation) ? null : "Internet",
+                PrintScalingDefault = !IsRequired(PrinterAttribute.PrintScalingDefault) ? null : options.PrintScaling.FirstOrDefault(),
+                PrintScalingSupported = !IsRequired(PrinterAttribute.PrintScalingSupported) ? null : options.PrintScaling,
+                PrinterUriSupported = !IsRequired(PrinterAttribute.PrinterUriSupported) ? null : [GetPrinterUrl("/ipp/print")],
+                UriAuthenticationSupported = !IsRequired(PrinterAttribute.UriAuthenticationSupported) ? null : [UriAuthentication.None],
+                UriSecuritySupported = !IsRequired(PrinterAttribute.UriSecuritySupported) ? null : [GetUriSecuritySupported()],
+                PrinterUpTime = !IsRequired(PrinterAttribute.PrinterUpTime) ? null : (int)(dateTimeOffsetProvider.UtcNow - _startTime).TotalSeconds,
+                MediaDefault = !IsRequired(PrinterAttribute.MediaDefault) ? null : options.Media.FirstOrDefault(),
+                MediaSupported = !IsRequired(PrinterAttribute.MediaSupported) ? null : options.Media,
+                SidesDefault = !IsRequired(PrinterAttribute.SidesDefault) ? null : options.Sides.FirstOrDefault(),
+                SidesSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : Enum.GetValues(typeof(Sides)).Cast<Sides>().ToArray(),
+                PdlOverrideSupported = !IsRequired(PrinterAttribute.PdlOverrideSupported) ? null : "attempted",
+                MultipleOperationTimeOut = !IsRequired(PrinterAttribute.MultipleOperationTimeOut) ? null : 120,
+                FinishingsDefault = !IsRequired(PrinterAttribute.FinishingsDefault) ? null : options.Finishings.FirstOrDefault(),
+                FinishingsSupported = !IsRequired(PrinterAttribute.SidesSupported) ? null : options.Finishings,
+                PrinterResolutionDefault = !IsRequired(PrinterAttribute.PrinterResolutionDefault) ? null : options.Resolution.FirstOrDefault(),
+                PrinterResolutionSupported = !IsRequired(PrinterAttribute.PrinterResolutionSupported) ? null : [options.Resolution.FirstOrDefault()],
+                PrintQualityDefault = !IsRequired(PrinterAttribute.PrintQualityDefault) ? null : options.PrintQuality.FirstOrDefault(),
+                PrintQualitySupported = !IsRequired(PrinterAttribute.PrintQualitySupported) ? null : options.PrintQuality,
+                JobPriorityDefault = !IsRequired(PrinterAttribute.JobPriorityDefault) ? null : options.JobPriority,
+                JobPrioritySupported = !IsRequired(PrinterAttribute.JobPrioritySupported) ? null : options.JobPriority,
+                CopiesDefault = !IsRequired(PrinterAttribute.CopiesDefault) ? null : options.Copies,
+                CopiesSupported = !IsRequired(PrinterAttribute.CopiesSupported) ? null : new SharpIpp.Protocol.Models.Range(options.Copies, options.Copies),
+                OrientationRequestedDefault = !IsRequired(PrinterAttribute.OrientationRequestedDefault) ? null : options.Orientation,
+                OrientationRequestedSupported = !IsRequired(PrinterAttribute.OrientationRequestedSupported) ? null : Enum.GetValues(typeof(Orientation)).Cast<Orientation>().ToArray(),
+                PageRangesSupported = !IsRequired(PrinterAttribute.PageRangesSupported) ? null : false,
+                PagesPerMinute = !IsRequired(PrinterAttribute.PagesPerMinute) ? null : 20,
+                PagesPerMinuteColor = !IsRequired(PrinterAttribute.PagesPerMinuteColor) ? null : 20,
+                PrinterMoreInfo = !IsRequired(PrinterAttribute.PrinterMoreInfo) ? null : GetPrinterMoreInfo(),
+                JobHoldUntilSupported = !IsRequired(PrinterAttribute.JobHoldUntilSupported) ? null : [JobHoldUntil.NoHold],
+                JobHoldUntilDefault = !IsRequired(PrinterAttribute.JobHoldUntilDefault) ? null : JobHoldUntil.NoHold,
+                ReferenceUriSchemesSupported = !IsRequired(PrinterAttribute.ReferenceUriSchemesSupported) ? null : [UriScheme.Ftp, UriScheme.Http, UriScheme.Https],
+                OutputBinDefault = !IsRequired(PrinterAttribute.OutputBinDefault) ? null : options.OutputBin.FirstOrDefault(),
+                OutputBinSupported = !IsRequired(PrinterAttribute.OutputBinSupported) ? null : options.OutputBin,
+                MediaColDefault = !IsRequired(PrinterAttribute.MediaColDefault) ? null : new MediaCol
+                {
+                    MediaBackCoating = MediaCoating.None,
+                    MediaBottomMargin = 10,
+                    MediaColor = "black",
+                    MediaLeftMargin = 10,
+                    MediaRightMargin = 10,
+                    MediaTopMargin = 10,
+                    MediaFrontCoating = MediaCoating.None,
+                    MediaGrain = MediaGrain.XDirection,
+                    MediaHoleCount = 0,
+                    MediaInfo = "my black color",
+                    MediaOrderCount = 1
+                },
+                PrintColorModeDefault = !IsRequired(PrinterAttribute.PrintColorModeDefault) ? null : options.PrintColorModes.FirstOrDefault(),
+                PrintColorModeSupported = !IsRequired(PrinterAttribute.PrintColorModeSupported) ? null : options.PrintColorModes
+            }
         };
     }
 
@@ -475,7 +483,7 @@ public class PrinterService(
             RequestId = request.RequestId,
             Version = request.Version,
             StatusCode = IppStatusCode.SuccessfulOk,
-            Jobs = jobs.Select(x => GetJobDescriptionAttributes(x, request.OperationAttributes?.RequestedAttributes, true)).ToArray()
+            JobsAttributes = jobs.Select(x => GetJobDescriptionAttributes(x, request.OperationAttributes?.RequestedAttributes, true)).ToArray()
         };
     }
 
@@ -576,13 +584,16 @@ public class PrinterService(
         {
             RequestId = request.RequestId,
             Version = request.Version,
-            JobState = JobState.Pending,
             StatusCode = IppStatusCode.ClientErrorNotPossible,
-            JobStateReasons = [JobStateReason.None]
+            JobAttributes = new()
+            {
+                JobState = JobState.Pending,
+                JobStateReasons = [JobStateReason.None]
+            }
         };
         var job = new PrinterJob(GetNextValue(), request.OperationAttributes?.RequestingUserName, dateTimeOffsetProvider.UtcNow);
-        response.JobId = job.Id;
-        response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
+        response.JobAttributes.JobId = job.Id;
+        response.JobAttributes.JobUri = $"{GetPrinterUrl()}/{job.Id}";
         FillWithDefaultValues(job.Id, request.OperationAttributes ??= new());
         FillWithDefaultValues(request.JobTemplateAttributes ??= new());
         job.Requests.Add(request);
@@ -658,17 +669,20 @@ public class PrinterService(
 
     private async Task<PrintJobResponse> GetPrintJobResponseAsync(PrintJobRequest request)
     {
+        var job = new PrinterJob(GetNextValue(), request.OperationAttributes?.RequestingUserName, dateTimeOffsetProvider.UtcNow);
         var response = new PrintJobResponse
         {
             RequestId = request.RequestId,
             Version = request.Version,
-            JobState = JobState.Pending,
             StatusCode = IppStatusCode.ClientErrorNotPossible,
-            JobStateReasons = [JobStateReason.None]
+            JobAttributes = new()
+            {
+                JobId = job.Id,
+                JobUri = $"{GetPrinterUrl()}/{job.Id}",
+                JobState = JobState.Pending,
+                JobStateReasons = [JobStateReason.None]
+            }
         };
-        var job = new PrinterJob(GetNextValue(), request.OperationAttributes?.RequestingUserName, dateTimeOffsetProvider.UtcNow);
-        response.JobId = job.Id;
-        response.JobUri = $"{GetPrinterUrl()}/{job.Id}";
         FillWithDefaultValues(job.Id, request.OperationAttributes ??= new());
         FillWithDefaultValues(request.JobTemplateAttributes ??= new());
         job.Requests.Add(request);

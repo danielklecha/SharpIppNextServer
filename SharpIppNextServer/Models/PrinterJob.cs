@@ -1,4 +1,5 @@
 ﻿using SharpIpp.Models;
+using SharpIpp.Models.Requests;
 using SharpIpp.Protocol.Models;
 
 namespace SharpIppNextServer.Models;

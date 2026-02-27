@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.StaticFiles;
 using Quartz;
 using SharpIpp.Models;
+using SharpIpp.Models.Requests;
 using SharpIpp.Protocol.Models;
 using System.IO.Abstractions;
 

@@ -22,7 +22,7 @@
 
   <ItemGroup>
     <PackageReference Include="Quartz.Extensions.Hosting" />
-	  <PackageReference Include="SharpIppNext" />
+    <PackageReference Include="SharpIppNext" />
     <PackageReference Include="System.IO.Abstractions" />
   </ItemGroup>
 
