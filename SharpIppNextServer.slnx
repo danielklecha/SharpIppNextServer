@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/Solution items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="SharpIppNextServer/SharpIppNextServer.csproj" />
+</Solution>

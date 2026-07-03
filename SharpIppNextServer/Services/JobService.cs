@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.AspNetCore.StaticFiles;
 using Quartz;
 using SharpIpp.Models;
 using SharpIpp.Models.Requests;
@@ -32,9 +32,6 @@ public class JobService(
                     case SendDocumentRequest sendJobRequest:
                         await SaveAsync(prefix, sendJobRequest);
                         break;
-                    case SendUriRequest sendUriRequest:
-                        await SaveAsync(prefix, sendUriRequest);
-                        break;
                 }
             }
             await printerService.AddCompletedJobAsync(job.Id);
@@ -64,17 +61,6 @@ public class JobService(
         await request.Document.DisposeAsync();
     }
 
-    private async Task SaveAsync(string prefix, SendUriRequest request)
-    {
-        if (request.OperationAttributes is null || request.OperationAttributes.DocumentUri is null)
-            return;
-        using var client = new HttpClient();
-        using var result = await client.GetAsync(request.OperationAttributes.DocumentUri);
-        if (!result.IsSuccessStatusCode)
-            return;
-        using var stream = await result.Content.ReadAsStreamAsync();
-        await SaveAsync(stream, GetFileName(prefix, request.OperationAttributes.DocumentName, request.OperationAttributes.DocumentFormat, fileSystem.Path.GetFileNameWithoutExtension(request.OperationAttributes.DocumentUri.LocalPath), fileSystem.Path.GetExtension(request.OperationAttributes.DocumentUri.LocalPath)));
-    }
 
     private string GetFileName(string prefix, string? documentName, string? documentFormat, string? alternativeDocumentName = null, string? alternativeExtension = null)
     {

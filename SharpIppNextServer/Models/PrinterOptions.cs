@@ -1,4 +1,4 @@
-﻿using SharpIpp.Protocol.Models;
+using SharpIpp.Protocol.Models;
 
 namespace SharpIppNextServer.Models;
 
@@ -10,7 +10,7 @@ public class PrinterOptions
     public string FirmwareName { get; set; } = "SIN22183498";
     public Sides[] Sides { get; set; } = [SharpIpp.Protocol.Models.Sides.OneSided];
     public PrintScaling[] PrintScaling { get; set; } = [SharpIpp.Protocol.Models.PrintScaling.Auto];
-    public string[] Media { get; set; } = [
+    public Media[] Media { get; set; } = [
         "iso_a4_210x297mm",
         "na_executive_7.25x10.5in",
         "na_letter_8.5x11in",
@@ -52,7 +52,18 @@ public class PrinterOptions
     public int Copies { get; set; } = 1;
     public Orientation Orientation { get; set; } = Orientation.Portrait;
     public JobHoldUntil JobHoldUntil { get; set; } = JobHoldUntil.NoHold;
-    public string DocumentFormat { get; set; } = "application/pdf";
-    public string[] OutputBin { get; set; } = ["top"];
+    public DocumentFormat DocumentFormat { get; set; } = DocumentFormat.ApplicationPdf;
+    public OutputBin[] OutputBin { get; set; } = [SharpIpp.Protocol.Models.OutputBin.Top];
     public PrintColorMode[] PrintColorModes { get; set; } = [PrintColorMode.Color];
+    public string Location { get; set; } = "Internet";
+    public string Manufacturer { get; set; } = "danielklecha";
+    public string Model { get; set; } = "SharpIppNext1";
+    public string SerialNumber { get; set; } = "SIN279BJ23J07PX";
+    public int PagesPerMinute { get; set; } = 20;
+    public int PagesPerMinuteColor { get; set; } = 20;
+    public bool MultipleDocumentJobsSupported { get; set; } = true;
+    public bool PageRangesSupported { get; set; } = false;
+    public int MultipleOperationTimeout { get; set; } = 120;
+    public JobHoldUntil[] JobHoldUntilSupported { get; set; } = [JobHoldUntil.NoHold];
+    public UriScheme[] ReferenceUriSchemesSupported { get; set; } = [UriScheme.Ftp, UriScheme.Http, UriScheme.Https];
 }
