@@ -10,48 +10,60 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    defaults:
+      run:
+        shell: bash
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.x
-    - name: Replace Version in csproj files
+        dotnet-version: 10.0.x
+    - name: Replace Version in csproj and iss files
       run: |
         tag=$(echo "${{ github.ref_name }}" | sed 's/^v//')
         find . -type f -name "*.csproj" -exec sed -i "s/<Version>.*<\/Version>/<Version>${tag}<\/Version>/g" {} \;
+        sed -i "s/#define MyAppVersion \".*\"/#define MyAppVersion \"${tag}\"/g" Setup/installer.iss
     - name: Install zip
       uses: montudor/action-zip@v1
     - name: Restore dependencies
       run: dotnet restore
     - name: Publish win-x64
       run: dotnet publish --no-restore --configuration Release --runtime win-x64 --no-self-contained
-    - name: Copy license win-x64
-      run: |
-        cp LICENSE.txt SharpIppNextServer/bin/Release/net8.0/win-x64/publish/LICENSE.txt
+
     - name: Pack win-x64
-      run: zip -qq -r "../../../SharpIppNextServer-${{github.ref_name}}-win-x64.zip" *.*
-      working-directory: SharpIppNextServer/bin/Release/net8.0/win-x64/publish/
+      run: zip -qq -r "../../../IppPrinter-${{github.ref_name}}-win-x64.zip" *.*
+      working-directory: IppPrinter/bin/Release/net10.0/win-x64/publish/
+    - name: Install Wine and Inno Setup
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y wine wine32 wine64 innoextract xvfb
+        wget -qO innosetup.exe https://files.jrsoftware.org/is/6/innosetup-6.3.3.exe
+        innoextract -d inno innosetup.exe
+    - name: Build Inno Setup Installer
+      run: |
+        export WINEDEBUG=-all
+        xvfb-run -a wine inno/app/ISCC.exe Setup/installer.iss
+    - name: Copy Setup Installer to root release path
+      run: |
+        cp Setup/Output/IppPrinterSetup.exe ./IppPrinter-${{github.ref_name}}-Setup.exe
     - name: Publish linux-x64
       run: dotnet publish --no-restore --configuration Release --runtime linux-x64 --no-self-contained
-    - name: Copy license linux-x64
-      run: |
-        cp LICENSE.txt SharpIppNextServer/bin/Release/net8.0/linux-x64/publish/LICENSE.txt
+
     - name: Pack linux-x64
-      run: zip -qq -r ../../../SharpIppNextServer-${{github.ref_name}}-linux-x64.zip *.*
-      working-directory: SharpIppNextServer/bin/Release/net8.0/linux-x64/publish/
+      run: zip -qq -r ../../../IppPrinter-${{github.ref_name}}-linux-x64.zip *.*
+      working-directory: IppPrinter/bin/Release/net10.0/linux-x64/publish/
     - name: Publish osx-x64
       run: dotnet publish --no-restore --configuration Release --runtime osx-x64 --no-self-contained
-    - name: Copy license osx-x64
-      run: |
-        cp LICENSE.txt SharpIppNextServer/bin/Release/net8.0/osx-x64/publish/LICENSE.txt
+
     - name: Pack osx-x64
-      run: zip -qq -r ../../../SharpIppNextServer-${{github.ref_name}}-osx-x64.zip *.*
-      working-directory: SharpIppNextServer/bin/Release/net8.0/osx-x64/publish/
+      run: zip -qq -r ../../../IppPrinter-${{github.ref_name}}-osx-x64.zip *.*
+      working-directory: IppPrinter/bin/Release/net10.0/osx-x64/publish/
     - name: Create GitHub Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         tag=${{ github.ref_name }}
-        gh release create "$tag" --generate-notes SharpIppNextServer/bin/Release/*.zip
+        gh release create "$tag" --generate-notes IppPrinter/bin/Release/*.zip ./IppPrinter-${{github.ref_name}}-Setup.exe

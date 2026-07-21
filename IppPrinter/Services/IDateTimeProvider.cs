@@ -1,5 +1,5 @@
-﻿
-namespace SharpIppNextServer.Services
+
+namespace IppPrinter.Services
 {
     public interface IDateTimeProvider
     {

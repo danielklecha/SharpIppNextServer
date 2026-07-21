@@ -1,8 +1,8 @@
-﻿using SharpIpp.Models;
+using SharpIpp.Models;
 using SharpIpp.Models.Requests;
 using SharpIpp.Protocol.Models;
 
-namespace SharpIppNextServer.Models;
+namespace IppPrinter.Models;
 
 public class PrinterJob : IEquatable<PrinterJob>, IDisposable, IAsyncDisposable
 {
@@ -72,7 +72,7 @@ public class PrinterJob : IEquatable<PrinterJob>, IDisposable, IAsyncDisposable
         return !Equals(left, right);
     }
 
-    public async Task<bool> TrySetStateAsync(JobState? state, DateTimeOffset dateTime)
+    public bool TrySetState(JobState? state, DateTimeOffset dateTime)
     {
         switch (state)
         {
@@ -87,13 +87,11 @@ public class PrinterJob : IEquatable<PrinterJob>, IDisposable, IAsyncDisposable
                 ProcessingDateTime = dateTime;
                 return true;
             case JobState.Canceled when !State.HasValue || State == JobState.Pending:
-                await ClearDocumentStreamsAsync();
                 State = state;
                 ProcessingDateTime = dateTime;
                 CompletedDateTime = dateTime;
                 return true;
             case JobState.Completed when State == JobState.Processing:
-                await ClearDocumentStreamsAsync();
                 State = state;
                 CompletedDateTime = dateTime;
                 return true;
@@ -113,7 +111,7 @@ public class PrinterJob : IEquatable<PrinterJob>, IDisposable, IAsyncDisposable
         GC.SuppressFinalize(this);
     }
 
-    protected virtual async ValueTask ClearDocumentStreamsAsync()
+    public virtual async ValueTask ClearDocumentStreamsAsync()
     {
         foreach (var ippRequest in Requests)
         {

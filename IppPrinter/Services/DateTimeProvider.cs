@@ -1,4 +1,4 @@
-﻿namespace SharpIppNextServer.Services;
+namespace IppPrinter.Services;
 
 public class DateTimeProvider : IDateTimeProvider
 {

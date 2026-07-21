@@ -1,11 +1,11 @@
 using SharpIpp.Protocol.Models;
 
-namespace SharpIppNextServer.Models;
+namespace IppPrinter.Models;
 
 public class PrinterOptions
 {
-    public string Name { get; set; } = "SharpIppNext";
-    public string DnsSdName { get; set; } = "SharpIppNext [231076]";
+    public string Name { get; set; } = "IppPrinter";
+    public string DnsSdName { get; set; } = "IppPrinter [231076]";
     public Guid UUID { get; set; } = new Guid("d178b387-3a93-4d17-a561-007f876c4901");
     public string FirmwareName { get; set; } = "SIN22183498";
     public Sides[] Sides { get; set; } = [SharpIpp.Protocol.Models.Sides.OneSided];
@@ -57,7 +57,7 @@ public class PrinterOptions
     public PrintColorMode[] PrintColorModes { get; set; } = [PrintColorMode.Color];
     public string Location { get; set; } = "Internet";
     public string Manufacturer { get; set; } = "danielklecha";
-    public string Model { get; set; } = "SharpIppNext1";
+    public string Model { get; set; } = "IppPrinter1";
     public string SerialNumber { get; set; } = "SIN279BJ23J07PX";
     public int PagesPerMinute { get; set; } = 20;
     public int PagesPerMinuteColor { get; set; } = 20;
@@ -66,4 +66,71 @@ public class PrinterOptions
     public int MultipleOperationTimeout { get; set; } = 120;
     public JobHoldUntil[] JobHoldUntilSupported { get; set; } = [JobHoldUntil.NoHold];
     public UriScheme[] ReferenceUriSchemesSupported { get; set; } = [UriScheme.Ftp, UriScheme.Http, UriScheme.Https];
+    public int MaxPendingJobs { get; set; } = 10;
+    public int MaxDocumentsPerJob { get; set; } = 10;
+    public int MaxJobHistory { get; set; } = 100;
+    public int JobCancelAfter { get; set; } = 10800;
+    public string? JobsPath { get; set; }
+
+    public bool? ColorSupported { get; set; }
+    public string? MakeAndModel { get; set; }
+    public DocumentFormat[] DocumentFormatSupported { get; set; } = [
+        DocumentFormat.ApplicationPdf,
+        DocumentFormat.ImagePwgRaster,
+        DocumentFormat.ImageUrf,
+        DocumentFormat.ImageJpeg,
+        (DocumentFormat)"image/png",
+        (DocumentFormat)"image/gif",
+        (DocumentFormat)"image/webp",
+        (DocumentFormat)"image/bmp",
+        (DocumentFormat)"image/tiff",
+        (DocumentFormat)"text/plain"
+    ];
+    public string DriverInstallerUrl { get; set; } = "https://github.com/danielklecha/SharpIppNext";
+    public string MoreInfoManufacturerUrl { get; set; } = "https://github.com/danielklecha/SharpIppNext";
+    public bool SupplyReportingEnabled { get; set; } = true;
+    public PrinterSupply[] Supplies { get; set; } = [
+        new PrinterSupply
+        {
+            Type = PrinterSupplyType.Toner,
+            Level = 100,
+            MaxCapacity = 100,
+            ColorName = "black",
+            MarkerName = "Black Toner",
+            MarkerType = MarkerType.Toner,
+            Unit = CapacityUnit.Percent
+        },
+        new PrinterSupply
+        {
+            Type = PrinterSupplyType.Toner,
+            Level = 100,
+            MaxCapacity = 100,
+            ColorName = "cyan",
+            MarkerName = "Cyan Toner",
+            MarkerType = MarkerType.Toner,
+            Unit = CapacityUnit.Percent
+        },
+        new PrinterSupply
+        {
+            Type = PrinterSupplyType.Toner,
+            Level = 100,
+            MaxCapacity = 100,
+            ColorName = "magenta",
+            MarkerName = "Magenta Toner",
+            MarkerType = MarkerType.Toner,
+            Unit = CapacityUnit.Percent
+        },
+        new PrinterSupply
+        {
+            Type = PrinterSupplyType.Toner,
+            Level = 100,
+            MaxCapacity = 100,
+            ColorName = "yellow",
+            MarkerName = "Yellow Toner",
+            MarkerType = MarkerType.Toner,
+            Unit = CapacityUnit.Percent
+        }
+    ];
+    public SharpIpp.Protocol.Models.NaturalLanguage NaturalLanguageConfigured { get; set; } = SharpIpp.Protocol.Models.NaturalLanguage.EnUs;
+    public string NaturalLanguage { get; set; } = "en-us";
 }

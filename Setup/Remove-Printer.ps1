@@ -1,4 +1,12 @@
-$printerName = "SharpIppNext"
+$printerName = "IppPrinter"
+
+function Assert-Administrator {
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Write-Error "This script must be run as Administrator. Please open PowerShell as Administrator and run the script again."
+        exit 1
+    }
+}
 
 function Restart-Spooler {
     try {
@@ -15,11 +23,11 @@ function Restart-Spooler {
 function Remove-IppPrinter {
     if (Get-Printer -Name $printerName -ErrorAction SilentlyContinue) {
         try {
-			Write-Host "Removing printer: $printerName"
-			Remove-Printer -Name $printerName
-			Write-Host "Printer $printerName removed successfully."
+			Write-Output "Removing printer: $printerName"
+			Remove-Printer -Name $printerName -ErrorAction Stop
+			Write-Output "Printer $printerName removed successfully."
 		} catch {
-			Write-Error "Error adding printer '$printerName': $_"
+			Write-Error "Error removing printer '$printerName': $_"
 			exit 1
 		}
     }
@@ -29,7 +37,8 @@ function Remove-IppPrinter {
 }
 
 # Execute steps
+Assert-Administrator
 Restart-Spooler
 Remove-IppPrinter
 
-Write-Output "Printer setup completed successfully."
+Write-Output "Printer removal completed successfully."

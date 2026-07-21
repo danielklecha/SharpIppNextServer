@@ -1,8 +1,15 @@
-﻿$driverName = "Microsoft Print To PDF"
-$printerName = "SharpIppNext"
+$printerName = "IppPrinter"
 $ipAddress = "127.0.0.1"
 $portNumber = 631
-$printerUrl = "http://$ipAddress`:$portNumber/$printerName"
+$printerUrl = "http://$ipAddress`:$portNumber/ipp/print"
+
+function Assert-Administrator {
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Write-Error "This script must be run as Administrator. Please open PowerShell as Administrator and run the script again."
+        exit 1
+    }
+}
 
 function Import-Modules {
     if ($PSVersionTable.PSVersion.Major -ge 7) {
@@ -54,21 +61,6 @@ function Restart-Spooler {
     }
 }
 
-function Install-PrintDriver {
-    if (Get-PrinterDriver -Name $driverName -ErrorAction SilentlyContinue) {
-        Write-Output "Printer driver '$driverName' is already installed."
-        return
-    }
-    try {
-        Write-Output "Installing print driver: $driverName..."
-        Add-PrinterDriver -Name $driverName -ErrorAction Stop
-        Write-Output "Print driver installed successfully."
-    } catch {
-        Write-Error "Error installing print driver: $_"
-        exit 1
-    }
-}
-
 function Add-IppPrinter {
     if (Get-Printer -Name $printerName -ErrorAction SilentlyContinue) {
         Write-Output "Printer '$printerName' already exists."
@@ -76,7 +68,7 @@ function Add-IppPrinter {
     }
     try {
         Write-Output "Adding printer: $printerName..."
-        Add-Printer -Name $printerName -PortName $printerUrl -DriverName $driverName -ErrorAction Stop
+        Add-Printer -Name $printerName -IppURL $printerUrl -ErrorAction Stop
         Write-Output "Printer '$printerName' added successfully."
     } catch {
         Write-Error "Error adding printer '$printerName': $_"
@@ -85,10 +77,10 @@ function Add-IppPrinter {
 }
 
 # Execute steps
+Assert-Administrator
 Import-Modules
 Install-WindowsFeature
 Restart-Spooler
-Install-PrintDriver
 Add-IppPrinter
 
 Write-Output "Printer setup completed successfully."
