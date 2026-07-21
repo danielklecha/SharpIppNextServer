@@ -1,6 +1,6 @@
-# Contributing to SharpIppNextServer
+# Contributing to IppPrinter
 
-Thank you for your interest in contributing to the **SharpIppNextServer** project! This document explains how to set up the development environment, work with the codebase, compile the Windows Installer, and understand the automated CI/CD pipeline.
+Thank you for your interest in contributing to the **IppPrinter** project! This document explains how to set up the development environment, work with the codebase, compile the Windows Installer, and understand the automated CI/CD pipeline.
 
 ---
 
@@ -18,8 +18,8 @@ To build and run this project, make sure you have the following installed:
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/danielklecha/SharpIppNextServer.git
-cd SharpIppNextServer
+git clone https://github.com/danielklecha/IppPrinter.git
+cd IppPrinter
 ```
 
 ### Build the Codebase

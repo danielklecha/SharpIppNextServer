@@ -1,6 +1,6 @@
 # IppPrinter
 
-[![GitHub downloads](https://img.shields.io/github/downloads/danielklecha/SharpIppNextServer/total.svg)](https://github.com/danielklecha/SharpIppNextServer/releases)
+[![GitHub downloads](https://img.shields.io/github/downloads/danielklecha/IppPrinter/total.svg)](https://github.com/danielklecha/IppPrinter/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
 
 **IppPrinter** is a lightweight, cross-platform IPP (Internet Printing Protocol) print server web application built with ASP.NET Core and powered by the [`SharpIppNext`](https://github.com/danielklecha/SharpIppNext) library.
@@ -30,7 +30,7 @@ The printer is compatible with any standard IPP client.
 
 ### Windows (GUI Installer)
 
-1. Download `IppPrinterSetup.exe` from [Releases](https://github.com/danielklecha/SharpIppNextServer/releases).
+1. Download `IppPrinterSetup.exe` from [Releases](https://github.com/danielklecha/IppPrinter/releases).
 2. Run the installer wizard as Administrator.
 3. The setup automatically installs the binaries, registers and starts the Windows Service, configures the firewall rule for port `631`, and registers the `IppPrinter` print queue.
 
@@ -64,6 +64,6 @@ For local development setup, building the installer, and integration testing ins
 
 ## License
 
-`SharpIppNextServer` is provided as-is under the [MIT license](LICENSE.txt).
+`IppPrinter` is provided as-is under the [MIT license](LICENSE.txt).
 
 For details on third-party dependencies and their licenses, see [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
