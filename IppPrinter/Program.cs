@@ -26,7 +26,10 @@ if (OperatingSystem.IsWindows())
 {
     builder.Logging.AddEventLog(settings =>
     {
-        settings.SourceName = "IppPrinter";
+        if (OperatingSystem.IsWindows())
+        {
+            settings.SourceName = "IppPrinter";
+        }   
     });
 }
 builder.Services

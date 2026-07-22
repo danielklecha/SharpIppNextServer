@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Solution items/">
+    <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
   <Project Path="IppPrinter/IppPrinter.csproj" />

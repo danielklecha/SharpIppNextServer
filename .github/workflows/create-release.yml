@@ -15,9 +15,9 @@ jobs:
         shell: bash
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: 10.0.x
     - name: Replace Version in csproj and iss files
@@ -25,8 +25,6 @@ jobs:
         tag=$(echo "${{ github.ref_name }}" | sed 's/^v//')
         find . -type f -name "*.csproj" -exec sed -i "s/<Version>.*<\/Version>/<Version>${tag}<\/Version>/g" {} \;
         sed -i "s/#define MyAppVersion \".*\"/#define MyAppVersion \"${tag}\"/g" Setup/installer.iss
-    - name: Install zip
-      uses: montudor/action-zip@v1
     - name: Restore dependencies
       run: dotnet restore
     - name: Publish win-x64
@@ -35,11 +33,10 @@ jobs:
     - name: Pack win-x64
       run: zip -qq -r "../../../IppPrinter-${{github.ref_name}}-win-x64.zip" *.*
       working-directory: IppPrinter/bin/Release/net10.0/win-x64/publish/
-    - name: Install Wine and Inno Setup
+    - name: Install Wine, Inno Setup, and dependencies
       run: |
-        sudo dpkg --add-architecture i386
         sudo apt-get update
-        sudo apt-get install -y wine wine32 wine64 innoextract xvfb
+        sudo apt-get install -y wine innoextract xvfb zip
         wget -qO innosetup.exe https://files.jrsoftware.org/is/6/innosetup-6.3.3.exe
         innoextract -d inno innosetup.exe
     - name: Build Inno Setup Installer
