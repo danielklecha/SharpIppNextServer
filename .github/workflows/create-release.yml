@@ -15,9 +15,9 @@ jobs:
         shell: bash
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
     - name: Setup .NET
-      uses: actions/setup-dotnet@v5
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
     - name: Replace Version in csproj and iss files
@@ -35,8 +35,8 @@ jobs:
       working-directory: IppPrinter/bin/Release/net10.0/win-x64/publish/
     - name: Install Wine, Inno Setup, and dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y wine innoextract xvfb zip
+        sudo NEEDRESTART_MODE=l DEBIAN_FRONTEND=noninteractive apt-get update
+        sudo NEEDRESTART_MODE=l DEBIAN_FRONTEND=noninteractive apt-get install -y wine innoextract xvfb zip
         wget -qO innosetup.exe https://files.jrsoftware.org/is/6/innosetup-6.3.3.exe
         innoextract -d inno innosetup.exe
     - name: Build Inno Setup Installer
