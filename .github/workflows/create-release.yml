@@ -16,6 +16,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
@@ -48,7 +49,7 @@ jobs:
 
     - name: Copy Setup Installer to root release path
       run: |
-        Copy-Item "Setup\Output\IppPrinterSetup.exe" -Destination ".\IppPrinter-${{github.ref_name}}-Setup.exe"
+        Copy-Item "Setup\Output\IppPrinterSetup.exe" -Destination ".\IppPrinter-${{github.ref_name}}-x64.exe"
 
     - name: Publish linux-x64
       run: dotnet publish --no-restore --configuration Release --runtime linux-x64 --no-self-contained
@@ -68,4 +69,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         $tag = "${{ github.ref_name }}"
-        gh release create "$tag" --generate-notes IppPrinter\bin\Release\*.zip .\IppPrinter-${{github.ref_name}}-Setup.exe
+        gh release create "$tag" --generate-notes IppPrinter\bin\Release\*.zip .\IppPrinter-${{github.ref_name}}-x64.exe
