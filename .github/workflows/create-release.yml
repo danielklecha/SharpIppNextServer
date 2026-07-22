@@ -36,13 +36,13 @@ jobs:
     - name: Install Wine, Inno Setup, and dependencies
       run: |
         sudo NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get update
-        sudo NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y wine innoextract xvfb zip
+        sudo NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y wine xvfb zip
         wget -qO innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe
-        innoextract -d inno innosetup.exe
+        xvfb-run -a wine innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /DIR=inno
     - name: Build Inno Setup Installer
       run: |
         export WINEDEBUG=-all
-        xvfb-run -a wine inno/app/ISCC.exe Setup/installer.iss
+        xvfb-run -a wine inno/ISCC.exe Setup/installer.iss
     - name: Copy Setup Installer to root release path
       run: |
         cp Setup/Output/IppPrinterSetup.exe ./IppPrinter-${{github.ref_name}}-Setup.exe
