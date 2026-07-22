@@ -7,12 +7,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       contents: write
     defaults:
       run:
-        shell: bash
+        shell: pwsh
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
@@ -20,47 +20,52 @@ jobs:
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
+
+    - name: Install Inno Setup
+      run: winget install --id JRSoftware.InnoSetup.7 -e -s winget --accept-package-agreements --accept-source-agreements --silent --scope machine
+
     - name: Replace Version in csproj and iss files
       run: |
-        tag=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-        find . -type f -name "*.csproj" -exec sed -i "s/<Version>.*<\/Version>/<Version>${tag}<\/Version>/g" {} \;
-        sed -i "s/#define MyAppVersion \".*\"/#define MyAppVersion \"${tag}\"/g" Setup/installer.iss
+        $tag = "${{ github.ref_name }}".TrimStart('v')
+        Get-ChildItem -Filter *.csproj -Recurse | ForEach-Object {
+            (Get-Content $_.FullName) -replace '<Version>.*</Version>', "<Version>$tag</Version>" | Set-Content $_.FullName
+        }
+        (Get-Content Setup\installer.iss) -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$tag`"" | Set-Content Setup\installer.iss
+
     - name: Restore dependencies
       run: dotnet restore
+
     - name: Publish win-x64
       run: dotnet publish --no-restore --configuration Release --runtime win-x64 --no-self-contained
 
     - name: Pack win-x64
-      run: zip -qq -r "../../../IppPrinter-${{github.ref_name}}-win-x64.zip" *.*
+      run: Compress-Archive -Path * -DestinationPath "..\..\..\IppPrinter-${{github.ref_name}}-win-x64.zip" -Force
       working-directory: IppPrinter/bin/Release/net10.0/win-x64/publish/
-    - name: Install Wine, Inno Setup, and dependencies
-      run: |
-        sudo NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get update
-        sudo NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y wine xvfb zip
-        wget -qO innosetup.exe https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe
-        xvfb-run -a wine innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /DIR=inno
+
     - name: Build Inno Setup Installer
       run: |
-        export WINEDEBUG=-all
-        xvfb-run -a wine inno/ISCC.exe Setup/installer.iss
+        & "C:\Program Files\Inno Setup 7\ISCC.exe" Setup\installer.iss
+
     - name: Copy Setup Installer to root release path
       run: |
-        cp Setup/Output/IppPrinterSetup.exe ./IppPrinter-${{github.ref_name}}-Setup.exe
+        Copy-Item "Setup\Output\IppPrinterSetup.exe" -Destination ".\IppPrinter-${{github.ref_name}}-Setup.exe"
+
     - name: Publish linux-x64
       run: dotnet publish --no-restore --configuration Release --runtime linux-x64 --no-self-contained
 
     - name: Pack linux-x64
-      run: zip -qq -r ../../../IppPrinter-${{github.ref_name}}-linux-x64.zip *.*
+      run: Compress-Archive -Path * -DestinationPath "..\..\..\IppPrinter-${{github.ref_name}}-linux-x64.zip" -Force
       working-directory: IppPrinter/bin/Release/net10.0/linux-x64/publish/
     - name: Publish osx-x64
       run: dotnet publish --no-restore --configuration Release --runtime osx-x64 --no-self-contained
 
     - name: Pack osx-x64
-      run: zip -qq -r ../../../IppPrinter-${{github.ref_name}}-osx-x64.zip *.*
+      run: Compress-Archive -Path * -DestinationPath "..\..\..\IppPrinter-${{github.ref_name}}-osx-x64.zip" -Force
       working-directory: IppPrinter/bin/Release/net10.0/osx-x64/publish/
+
     - name: Create GitHub Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        tag=${{ github.ref_name }}
-        gh release create "$tag" --generate-notes IppPrinter/bin/Release/*.zip ./IppPrinter-${{github.ref_name}}-Setup.exe
+        $tag = "${{ github.ref_name }}"
+        gh release create "$tag" --generate-notes IppPrinter\bin\Release\*.zip .\IppPrinter-${{github.ref_name}}-Setup.exe
