@@ -1,7 +1,11 @@
+param (
+    [string]$Scheme = "http"
+)
+
 $printerName = "IppPrinter"
-$ipAddress = "127.0.0.1"
+$ipAddress = "localhost"
 $portNumber = 631
-$printerUrl = "http://$ipAddress`:$portNumber/ipp/print"
+$printerUrl = "$Scheme`://$ipAddress`:$portNumber/ipp/print"
 
 function Assert-Administrator {
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -67,6 +71,19 @@ function Add-IppPrinter {
         return
     }
     try {
+        Write-Output "Waiting for IppPrinter service to become available on port $portNumber..."
+        $maxWaitSeconds = 30
+        $waited = 0
+        while ($waited -lt $maxWaitSeconds) {
+            $connection = Test-NetConnection -ComputerName $ipAddress -Port $portNumber -InformationLevel Quiet -WarningAction SilentlyContinue
+            if ($connection) {
+                Write-Output "Port $portNumber is listening."
+                break
+            }
+            Start-Sleep -Seconds 1
+            $waited++
+        }
+
         Write-Output "Adding printer: $printerName..."
         Add-Printer -Name $printerName -IppURL $printerUrl -ErrorAction Stop
         Write-Output "Printer '$printerName' added successfully."

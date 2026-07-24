@@ -39,17 +39,24 @@ Name: "{autodesktop}\IppPrinter Jobs"; Filename: "{code:GetJobsDir}"; Tasks: des
 Source: "..\IppPrinter\bin\Release\net10.0\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "Add-Printer.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
 Source: "Remove-Printer.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
+Source: "Add-Certificate.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
+Source: "Remove-Certificate.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
+Source: "Update-AppSettings.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
 
 
 [Run]
+; 0.5 Configure Kestrel via PowerShell
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Update-AppSettings.ps1"" -Scheme {code:GetProtocolScheme} -AppDir ""{app}"" -JobsDir ""{code:GetJobsDir}"""; Flags: runhidden waituntilterminated; StatusMsg: "Configuring AppSettings..."
 ; 1. Create Windows Service
-Filename: "{sys}\sc.exe"; Parameters: "create {#MyAppName} binPath= ""{app}\{#MyAppExeName}"" start= auto DisplayName= ""{#MyAppName}"""; Flags: runhidden waituntilterminated; StatusMsg: "Registering Windows Service..."; BeforeInstall: UpdateAppSettingsJson
+Filename: "{sys}\sc.exe"; Parameters: "create {#MyAppName} binPath= ""{app}\{#MyAppExeName}"" start= auto DisplayName= ""{#MyAppName}"""; Flags: runhidden waituntilterminated; StatusMsg: "Registering Windows Service..."; BeforeInstall: SetupJobsDir
+; 1.5. Run PowerShell script to generate and trust certificate (HTTPS only)
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Add-Certificate.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Generating self-signed certificate..."; Check: IsHttpsSelected
 ; 2. Add Windows Firewall Rule
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#MyAppName}"" dir=in action=allow protocol=TCP localport=631 program=""{app}\{#MyAppExeName}"" enable=yes"; Flags: runhidden waituntilterminated; StatusMsg: "Configuring Windows Firewall..."
 ; 3. Start Windows Service
 Filename: "{sys}\sc.exe"; Parameters: "start {#MyAppName}"; Flags: runhidden waituntilterminated; StatusMsg: "Starting Windows Service..."
 ; 4. Run PowerShell script to add Windows Printer Queue
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""& '{app}\Setup\Add-Printer.ps1' *>&1 | Out-File -FilePath '{app}\printer_setup.log' -Encoding utf8"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing IPP Printer queue..."
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""& '{app}\Setup\Add-Printer.ps1' -Scheme {code:GetProtocolScheme} *>&1 | Out-File -FilePath '{app}\printer_setup.log' -Encoding utf8"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing IPP Printer queue..."
 ; 5. View Setup Log (postinstall checkbox)
 Filename: "{code:GetInstallLogPath}"; Description: "View installation log"; Flags: postinstall shellexec skipifsilent unchecked
 Filename: "{app}\THIRD-PARTY-NOTICES.txt"; Description: "View third-party licenses and notices"; Flags: postinstall shellexec skipifsilent unchecked
@@ -57,6 +64,8 @@ Filename: "{app}\THIRD-PARTY-NOTICES.txt"; Description: "View third-party licens
 [UninstallRun]
 ; 1. Run PowerShell script to remove Windows Printer Queue
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Remove-Printer.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "RemovePrinterQueue"
+; 1.5. Run PowerShell script to remove certificate
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Remove-Certificate.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveCertificate"
 ; 2. Delete Windows Firewall Rule
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#MyAppName}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallRule"
 ; 3. Stop Windows Service

@@ -1,5 +1,6 @@
 var
   JobsDirPage: TInputDirWizardPage;
+  ProtocolPage: TInputOptionWizardPage;
   CachedInstallLogPath: string;
 
 function CheckRegistryForVersion10(RootKey: Integer; SubKey: string): Boolean;
@@ -128,7 +129,16 @@ end;
 
 procedure InitializeWizard();
 begin
-  JobsDirPage := CreateInputDirPage(wpSelectDir,
+  ProtocolPage := CreateInputOptionPage(wpLicense,
+    'Select Connection Protocol',
+    'How should the printer be accessed?',
+    'Select whether the printer should use HTTP or HTTPS.',
+    True, False);
+  ProtocolPage.Add('HTTPS (Port 631) - Self-signed certificate will be generated');
+  ProtocolPage.Add('HTTP (Port 631) - No certificate required, less secure');
+  ProtocolPage.SelectedValueIndex := 0;
+
+  JobsDirPage := CreateInputDirPage(ProtocolPage.ID,
     'Select Jobs Directory',
     'Where should the print jobs be saved?',
     'Specify the folder where print jobs should be stored, then click Next.' + #13#10 +
@@ -139,19 +149,25 @@ begin
   JobsDirPage.Values[0] := ExpandConstant('{commonappdata}\IppPrinter\jobs');
 end;
 
+function IsHttpsSelected(): Boolean;
+begin
+  Result := (ProtocolPage.SelectedValueIndex = 0);
+end;
+
+function GetProtocolScheme(Param: string): string;
+begin
+  if IsHttpsSelected() then
+    Result := 'https'
+  else
+    Result := 'http';
+end;
+
 function GetJobsDir(Param: string): string;
 begin
   if JobsDirPage <> nil then
     Result := JobsDirPage.Values[0]
   else
     Result := ExpandConstant('{commonappdata}\IppPrinter\jobs');
-end;
-
-function EscapeJsonString(Value: string): string;
-begin
-  Result := Value;
-  StringChangeEx(Result, '\', '\\', True);
-  StringChangeEx(Result, '"', '\"', True);
 end;
 
 procedure GrantFolderPermissions(Directory: string);
@@ -163,57 +179,12 @@ begin
   Exec('icacls.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
-procedure UpdateAppSettingsJson();
-var
-  JsonPath: string;
-  Lines: TArrayOfString;
-  I, J: Integer;
-  EscapedJobsDir: string;
-  PrinterIndex: Integer;
-  JobsPathIndex: Integer;
-  NewLines: TArrayOfString;
+procedure SetupJobsDir();
 begin
-  JsonPath := ExpandConstant('{app}\appsettings.json');
-  if not FileExists(JsonPath) then
-    Exit;
-
-  if LoadStringsFromFile(JsonPath, Lines) then
-  begin
-    JobsPathIndex := -1;
-    PrinterIndex := -1;
-    for I := 0 to GetArrayLength(Lines) - 1 do
-    begin
-      if Pos('"JobsPath":', Lines[I]) > 0 then
-        JobsPathIndex := I
-      else if Pos('"Printer":', Lines[I]) > 0 then
-        PrinterIndex := I;
-    end;
-
-    EscapedJobsDir := EscapeJsonString(GetJobsDir(''));
-    ForceDirectories(GetJobsDir(''));
-    GrantFolderPermissions(GetJobsDir(''));
-
-    if JobsPathIndex <> -1 then
-    begin
-      Lines[JobsPathIndex] := '    "JobsPath": "' + EscapedJobsDir + '",';
-      SaveStringsToUTF8File(JsonPath, Lines, False);
-    end
-    else if PrinterIndex <> -1 then
-    begin
-      SetArrayLength(NewLines, GetArrayLength(Lines) + 1);
-      for J := 0 to PrinterIndex do
-      begin
-        NewLines[J] := Lines[J];
-      end;
-      NewLines[PrinterIndex + 1] := '    "JobsPath": "' + EscapedJobsDir + '",';
-      for J := PrinterIndex + 1 to GetArrayLength(Lines) - 1 do
-      begin
-        NewLines[J + 1] := Lines[J];
-      end;
-      SaveStringsToUTF8File(JsonPath, NewLines, False);
-    end;
-  end;
+  ForceDirectories(GetJobsDir(''));
+  GrantFolderPermissions(GetJobsDir(''));
 end;
+
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
@@ -241,7 +212,7 @@ begin
              mbInformation, MB_OK);
     end;
   end
-  else if CurStep = ssDone then
+  else if CurStep = ssPostInstall then
   begin
     LogFilePathName := ExpandConstant('{log}');
     DestLogPath := GetInstallLogPath('');
