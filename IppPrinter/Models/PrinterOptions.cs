@@ -71,6 +71,8 @@ public class PrinterOptions
     public int MaxJobHistory { get; set; } = 100;
     public int JobCancelAfter { get; set; } = 10800;
     public string? JobsPath { get; set; }
+    public string? PostProcessName { get; set; }
+    public string? PostProcessArguments { get; set; }
 
     public bool? ColorSupported { get; set; }
     public string? MakeAndModel { get; set; }

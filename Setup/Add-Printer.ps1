@@ -73,15 +73,26 @@ function Add-IppPrinter {
     try {
         Write-Output "Waiting for IppPrinter service to become available on port $portNumber..."
         $maxWaitSeconds = 30
-        $waited = 0
-        while ($waited -lt $maxWaitSeconds) {
-            $connection = Test-NetConnection -ComputerName $ipAddress -Port $portNumber -InformationLevel Quiet -WarningAction SilentlyContinue
-            if ($connection) {
-                Write-Output "Port $portNumber is listening."
-                break
-            }
-            Start-Sleep -Seconds 1
-            $waited++
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $isListening = $false
+
+        while ($stopwatch.Elapsed.TotalSeconds -lt $maxWaitSeconds) {
+            try {
+                $tcp = New-Object System.Net.Sockets.TcpClient
+                $asyncResult = $tcp.BeginConnect($ipAddress, $portNumber, $null, $null)
+                $success = $asyncResult.AsyncWaitHandle.WaitOne(500, $false)
+                if ($success -and $tcp.Connected) {
+                    $isListening = $true
+                    $tcp.Close()
+                    break
+                }
+                $tcp.Close()
+            } catch { }
+            Start-Sleep -Milliseconds 500
+        }
+
+        if ($isListening) {
+            Write-Output "Port $portNumber is listening."
         }
 
         Write-Output "Adding printer: $printerName..."

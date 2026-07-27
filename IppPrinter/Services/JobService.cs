@@ -5,6 +5,7 @@ using IppPrinter.Extensions;
 using IppPrinter.Models;
 using SharpIpp.Models.Requests;
 using SharpIpp.Protocol.Models;
+using System.Diagnostics;
 using System.IO.Abstractions;
 
 namespace IppPrinter.Services;
@@ -283,7 +284,53 @@ public class JobService(
         var jobsPath = GetJobsPath();
         var path = fileSystem.Path.Combine(jobsPath, fileName);
         fileSystem.Directory.CreateDirectory(jobsPath);
-        using var fileStream = fileSystem.FileStream.New(path, FileMode.OpenOrCreate);
-        await stream.CopyToAsync(fileStream, cancellationToken);
+        using (var fileStream = fileSystem.FileStream.New(path, FileMode.OpenOrCreate))
+        {
+            await stream.CopyToAsync(fileStream, cancellationToken);
+        }
+
+        ExecutePostProcess(path);
+    }
+
+    private void ExecutePostProcess(string filePath)
+    {
+        var options = printerOptions.Value;
+        var processName = options.PostProcessName;
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return;
+        }
+
+        try
+        {
+            string arguments = string.IsNullOrWhiteSpace(options.PostProcessArguments)
+                ? $"\"{filePath}\""
+                : FormatFilePathPlaceholders(options.PostProcessArguments, filePath);
+
+            logger.LogDebug("Executing PostProcess '{ProcessName}' for file '{FilePath}' with arguments: {Arguments}", processName, filePath, arguments);
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = processName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to execute PostProcess '{ProcessName}' for file '{FilePath}'", processName, filePath);
+        }
+    }
+
+    private static string FormatFilePathPlaceholders(string input, string filePath)
+    {
+        if (input.Contains("{fullName}", StringComparison.OrdinalIgnoreCase))
+        {
+            return input.Replace("{fullName}", filePath, StringComparison.OrdinalIgnoreCase);
+        }
+        return $"{input} \"{filePath}\"";
     }
 }

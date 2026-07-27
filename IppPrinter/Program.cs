@@ -21,6 +21,8 @@ if (args.Contains("--test"))
 }
 
 var builder = WebApplication.CreateBuilder(args);
+// Enable Windows Service integration. If running as a normal process (Startup App or Console),
+// UseWindowsService automatically falls back to standard Console lifetime.
 builder.Host.UseWindowsService();
 if (OperatingSystem.IsWindows())
 {

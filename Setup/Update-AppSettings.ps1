@@ -1,7 +1,9 @@
 param(
     [string]$Scheme = "http",
     [string]$AppDir,
-    [string]$JobsDir
+    [string]$JobsDir,
+    [string]$PostProcessName = "",
+    [string]$PostProcessArguments = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,15 +38,21 @@ try {
             }
         }
 
+        if (-not $config.Printer) {
+            $config | Add-Member -NotePropertyName "Printer" -NotePropertyValue @{}
+        }
+
         if (-not [string]::IsNullOrEmpty($JobsDir)) {
-            if (-not $config.Printer) {
-                $config | Add-Member -NotePropertyName "Printer" -NotePropertyValue @{}
-            }
             $config.Printer.JobsPath = $JobsDir
             Write-Output "Set JobsPath to $JobsDir"
         }
 
-        $config | ConvertTo-Json -Depth 10 | Set-Content $jsonPath -Encoding UTF8
+        $config.Printer.PostProcessName = $PostProcessName
+        $config.Printer.PostProcessArguments = $PostProcessArguments
+        Write-Output "Set PostProcessName to '$PostProcessName' and PostProcessArguments to '$PostProcessArguments'"
+
+        $jsonText = $config | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($jsonPath, $jsonText, [System.Text.UTF8Encoding]::new($false))
         Write-Output "Updated Kestrel and Printer configuration."
     } else {
         throw "appsettings.Production.json not found in $AppDir"

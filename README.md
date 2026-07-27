@@ -8,12 +8,14 @@
 ## Features
 
 - **Full IPP Protocol Support**: Implements standard IPP 1.1 and 2.0 operations (`Print-Job`, `Create-Job`, `Send-Document`, `Get-Printer-Attributes`, `Get-Job-Attributes`, `Get-Jobs`, `Cancel-Job`, subscriptions, etc.) via `SharpIppNext`.
+- **HTTP & HTTPS (IPPS) Support**: Supports secure encrypted printing over TLS/HTTPS (IPPS) as well as standard unencrypted HTTP connections on port `631`.
 - **Automatic Document Conversion**: Converts incoming document payloads automatically to PDF format for storage and processing:
   - **PWG Raster** (`image/pwg-raster`)
   - **Apple Raster / URF** (`image/urf`)
   - **Images** (`image/png`, `image/jpeg`, `image/gif`, `image/bmp`)
   - **Plain Text** (`text/plain`) with automatic line wrapping and PDF layout generation
   - **Native PDF** (`application/pdf`) pass-through
+- **Post-Process Job Action**: Automatically execute external application (e.g. Adobe Acrobat, SumatraPDF), CLI print utility (`lp`/`lpr`), or custom script after receiving print job.
 - **mDNS / Zeroconf Discovery**: Automatic network printer advertisement (`PrinterDiscoveryService`) allowing clients on the network (Windows, macOS, iOS AirPrint, Android, Linux CUPS) to discover the printer automatically.
 - **Multiple IPP Endpoints**: Supports common IPP path patterns (`/`, `/ipp`, `/ipp/print`, `/printers/{PrinterName}`, `/{PrinterName}`).
 - **Cross-Platform & Windows Service**: Runs on Windows, Linux, and macOS. Includes native Windows Service hosting and Event Log integration.
@@ -30,9 +32,12 @@ The printer is compatible with any standard IPP client.
 
 ### Windows (GUI Installer)
 
-1. Download `IppPrinterSetup.exe` from [Releases](https://github.com/danielklecha/IppPrinter/releases).
+1. Download `IppPrinter-vX.X.X-x64.exe` from [Releases](https://github.com/danielklecha/IppPrinter/releases).
 2. Run the installer wizard as Administrator.
-3. The setup automatically installs the binaries, registers and starts the Windows Service, configures the firewall rule for port `631`, and registers the `IppPrinter` print queue.
+3. Select your desired **Installation Type**:
+   - **Windows Service (Default)**: Runs system-wide in the background before user logon (Session 0). Recommended for headless servers. *Note: Cannot display GUI windows or call interactive desktop applications.*
+   - **Startup Application**: Runs automatically upon user logon in the active desktop session. **Allows post-process actions to launch applications with a Graphical User Interface (GUI)** (e.g. Acrobat Reader, SumatraPDF window, or interactive scripts).
+4. The setup automatically configures the firewall rule for port `631`, sets up permissions, and registers the `IppPrinter` print queue.
 
 ### Windows (Printer Wizard)
 
@@ -57,6 +62,62 @@ All installation and removal steps are also automated via `Setup/Add-Printer.ps1
 ### Android
 
 Tested with the `NetPrinter` app and standard Android IPP print services.
+
+## Post-Processing Configuration
+
+`IppPrinter` can automatically execute an external application, viewer, or command-line tool whenever a print job is received and converted to PDF.
+
+You can configure post-processing actions in `appsettings.json` under the `"Printer"` configuration section:
+
+- **`PostProcessName`**: The full path to the executable or command (e.g. `AcroRd32.exe`, `SumatraPDF.exe`, `lp`, `powershell.exe`).
+- **`PostProcessArguments`**: Arguments passed to the process. You can use placeholders for the target PDF file path:
+  - `{fullName}`: Replaced with the path of the saved PDF file.
+  - If no placeholder is included, the file path is automatically appended in quotes (`"{fullName}"`).
+
+### Usage Examples
+
+#### Silent Print to Default Windows Printer via SumatraPDF
+
+```json
+"Printer": {
+  "Name": "IppPrinter",
+  "PostProcessName": "C:\\Program Files\\SumatraPDF\\SumatraPDF.exe",
+  "PostProcessArguments": "-print-to-default \"{fullName}\""
+}
+```
+
+#### Open PDF in Adobe Acrobat Reader
+
+```json
+"Printer": {
+  "Name": "IppPrinter",
+  "PostProcessName": "C:\\Program Files\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe",
+  "PostProcessArguments": "/t \"{fullName}\""
+}
+```
+
+> [!NOTE]
+> Interactive GUI applications like Adobe Acrobat Reader require running `IppPrinter` as a **Startup Application** (active desktop session). If `IppPrinter` is running as a **Windows Service** (Session 0), GUI applications cannot display windows. For silent background printing when running as a service, use SumatraPDF or CLI tools instead.
+
+#### Forward to Physical Printer via Linux CUPS (`lp`)
+
+```json
+"Printer": {
+  "Name": "IppPrinter",
+  "PostProcessName": "lp",
+  "PostProcessArguments": "-d Physical_Printer \"{fullName}\""
+}
+```
+
+#### Run a Custom PowerShell Script
+
+```json
+"Printer": {
+  "Name": "IppPrinter",
+  "PostProcessName": "powershell.exe",
+  "PostProcessArguments": "-NoProfile -ExecutionPolicy Bypass -File \"C:\\Scripts\\ProcessJob.ps1\" -FilePath \"{fullName}\""
+}
+```
 
 ## Contributing & Testing
 
