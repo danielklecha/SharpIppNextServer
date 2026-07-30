@@ -20,7 +20,11 @@ if (args.Contains("--test"))
     return;
 }
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory
+});
 // Enable Windows Service integration. If running as a normal process (Startup App or Console),
 // UseWindowsService automatically falls back to standard Console lifetime.
 builder.Host.UseWindowsService();

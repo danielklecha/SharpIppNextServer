@@ -74,50 +74,22 @@ You can configure post-processing actions in `appsettings.json` under the `"Prin
   - `{fullName}`: Replaced with the path of the saved PDF file.
   - If no placeholder is included, the file path is automatically appended in quotes (`"{fullName}"`).
 
-### Usage Examples
+### Usage Examples 
+
+#### Open pdf after printing via SumatraPDF
+
+1. Install SumatraPDF: `winget install --id SumatraPDF.SumatraPDF -e -s winget --accept-package-agreements --accept-source-agreements --silent --scope machine`
+2. Install IppPrinter as Startup Application with PostProcessName = "C:\Program Files\SumatraPDF\SumatraPDF.exe" and PostProcessArguments = "{fullName}" using `Setup/Add-Printer.ps1`
+
+#### Open PDF after printing via Adobe Acrobat Reader
+
+1. Install Adobe Acrobat Reader: `winget install --id Adobe.Acrobat.Reader.64-bit -e -s winget --accept-package-agreements --accept-source-agreements --silent --scope machine`
+2. Install IppPrinter as Startup Application with PostProcessName = "C:\\Program Files\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe" and PostProcessArguments = "/t \"{fullName}\""
 
 #### Silent Print to Default Windows Printer via SumatraPDF
 
-```json
-"Printer": {
-  "Name": "IppPrinter",
-  "PostProcessName": "C:\\Program Files\\SumatraPDF\\SumatraPDF.exe",
-  "PostProcessArguments": "-print-to-default \"{fullName}\""
-}
-```
-
-#### Open PDF in Adobe Acrobat Reader
-
-```json
-"Printer": {
-  "Name": "IppPrinter",
-  "PostProcessName": "C:\\Program Files\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe",
-  "PostProcessArguments": "/t \"{fullName}\""
-}
-```
-
-> [!NOTE]
-> Interactive GUI applications like Adobe Acrobat Reader require running `IppPrinter` as a **Startup Application** (active desktop session). If `IppPrinter` is running as a **Windows Service** (Session 0), GUI applications cannot display windows. For silent background printing when running as a service, use SumatraPDF or CLI tools instead.
-
-#### Forward to Physical Printer via Linux CUPS (`lp`)
-
-```json
-"Printer": {
-  "Name": "IppPrinter",
-  "PostProcessName": "lp",
-  "PostProcessArguments": "-d Physical_Printer \"{fullName}\""
-}
-```
-
-#### Run a Custom PowerShell Script
-
-```json
-"Printer": {
-  "Name": "IppPrinter",
-  "PostProcessName": "powershell.exe",
-  "PostProcessArguments": "-NoProfile -ExecutionPolicy Bypass -File \"C:\\Scripts\\ProcessJob.ps1\" -FilePath \"{fullName}\""
-}
-```
+1. Install SumatraPDF: `winget install --id SumatraPDF.SumatraPDF -e -s winget --accept-package-agreements --accept-source-agreements --silent --scope machine`
+2. Install IppPrinter as Windows Service with PostProcessName = "C:\Program Files\SumatraPDF\SumatraPDF.exe" and PostProcessArguments = "-print-to-default \"{fullName}\"" using `Setup/Add-Printer.ps1`
 
 ## Contributing & Testing
 

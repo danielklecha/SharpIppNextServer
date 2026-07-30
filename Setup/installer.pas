@@ -337,12 +337,9 @@ begin
     // 2. Delete existing Windows service
     Exec('sc.exe', 'delete IppPrinter', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     
-    // 3. Remove existing registry Run key if Service mode selected
-    if IsServiceSelected() then
-    begin
-      RegDeleteValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'IppPrinter');
-      RegDeleteValue(HKCU, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'IppPrinter');
-    end;
+    // 3. Remove legacy registry Run keys (replaced by Startup folder shortcut)
+    RegDeleteValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'IppPrinter');
+    RegDeleteValue(HKCU, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'IppPrinter');
 
     // 4. Delete the Windows firewall rule to avoid duplicates
     Exec('netsh.exe', 'advfirewall firewall delete rule name="IppPrinter"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);

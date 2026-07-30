@@ -61,8 +61,9 @@ try {
         Write-Output "Certificate already exists. Thumbprint: $($cert.Thumbprint)"
     }
 
-    # Grant read access to the private key for Local System (S-1-5-18)
+    # Grant read access to the private key for Local System (S-1-5-18) and BUILTIN\Users (S-1-5-32-545)
     Grant-PrivateKeyAccess -Cert $cert -SidString "S-1-5-18"
+    Grant-PrivateKeyAccess -Cert $cert -SidString "S-1-5-32-545"
 
     # Ensure the certificate is in the Trusted Root Certification Authorities store
     $rootStore = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")

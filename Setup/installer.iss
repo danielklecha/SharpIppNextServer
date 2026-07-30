@@ -32,9 +32,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Icons]
 Name: "{autodesktop}\IppPrinter Jobs"; Filename: "{code:GetJobsDir}"; Check: IsDesktopIconSelected
-
-[Registry]
-Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Check: IsStartupAppSelected
+Name: "{autostartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Check: IsStartupAppSelected
 
 [Files]
 ; Source files should be published before running this script
