@@ -1,0 +1,72 @@
+name: Build Installer
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. 1.0.0 or v1.0.0)'
+        required: false
+        default: '1.0.0'
+        type: string
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Install Inno Setup
+      run: winget install --id JRSoftware.InnoSetup.7 -e -s winget --accept-package-agreements --accept-source-agreements --silent --scope machine
+
+    - name: Replace Version in csproj and iss files
+      run: |
+        $rawVersion = "${{ inputs.version }}"
+        if (-not $rawVersion) { $rawVersion = "1.0.0" }
+        $tag = $rawVersion.TrimStart('v')
+        Get-ChildItem -Filter *.csproj -Recurse | ForEach-Object {
+            (Get-Content $_.FullName) -replace '<Version>.*</Version>', "<Version>$tag</Version>" | Set-Content $_.FullName
+        }
+        (Get-Content Setup\installer.iss) -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$tag`"" | Set-Content Setup\installer.iss
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Clean previous build artifacts
+      run: dotnet clean --configuration Release
+
+    - name: Publish win-x64 as WinExe for Installer
+      run: dotnet publish --no-restore --configuration Release --runtime win-x64 --no-self-contained -p:OutputType=WinExe
+
+    - name: Build Inno Setup Installer
+      run: |
+        & "C:\Program Files\Inno Setup 7\ISCC.exe" Setup\installer.iss
+
+    - name: Copy Setup Installer
+      run: |
+        $rawVersion = "${{ inputs.version }}"
+        if (-not $rawVersion) { $rawVersion = "1.0.0" }
+        $cleanTag = $rawVersion.TrimStart('v')
+        Copy-Item "Setup\Output\IppPrinterSetup.exe" -Destination ".\IppPrinter-v$cleanTag-x64.exe"
+
+    - name: Upload Installer Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: installer-x64
+        path: .\IppPrinter-*-x64.exe
+        retention-days: 1

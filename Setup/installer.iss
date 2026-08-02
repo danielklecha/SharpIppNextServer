@@ -11,6 +11,10 @@ AppId={{E8C7A3F0-DE9E-4B07-AB7E-3DFB54C8D003}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL=https://github.com/danielklecha/IppPrinter
+AppSupportURL=https://github.com/danielklecha/IppPrinter/issues
+UninstallDisplayIcon={app}\{#MyAppExeName}
+MinVersion=10.0.17763
 DefaultDirName={commonpf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
@@ -45,29 +49,29 @@ Source: "Update-AppSettings.ps1"; DestDir: "{app}\Setup"; Flags: ignoreversion
 
 [Run]
 ; 0.5 Configure Kestrel via PowerShell
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Update-AppSettings.ps1"" -Scheme {code:GetProtocolScheme} -AppDir ""{app}"" -JobsDir ""{code:GetJobsDir}"" -PostProcessName ""{code:GetPostProcessName}"" -PostProcessArguments ""{code:GetPostProcessArguments}"""; Flags: runhidden waituntilterminated; StatusMsg: "Configuring AppSettings..."; BeforeInstall: SetupJobsDir
-; 1. Create Windows Service (Service mode only)
-Filename: "{sys}\sc.exe"; Parameters: "create {#MyAppName} binPath= ""{app}\{#MyAppExeName}"" start= auto DisplayName= ""{#MyAppName}"""; Flags: runhidden waituntilterminated; StatusMsg: "Registering Windows Service..."; Check: IsServiceSelected
-; 1.5. Run PowerShell script to generate and trust certificate (HTTPS only)
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Update-AppSettings.ps1"" -Scheme {code:GetProtocolScheme} -AppDir ""{app}"" -JobsDir ""{code:GetJobsDir}"" -PostProcessName ""{code:GetPostProcessName}"" -PostProcessArguments ""{code:GetPostProcessArguments}"""; Flags: runhidden waituntilterminated; StatusMsg: "Configuring AppSettings..."
+; 1. Run PowerShell script to generate and trust certificate (HTTPS only)
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Add-Certificate.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Generating self-signed certificate..."; Check: IsHttpsSelected
+; 1.5 Create Windows Service (Service mode only)
+Filename: "{sys}\sc.exe"; Parameters: "create {#MyAppName} binPath= ""{app}\{#MyAppExeName}"" start= auto DisplayName= ""{#MyAppName}"""; Flags: runhidden waituntilterminated; StatusMsg: "Registering Windows Service..."; Check: IsServiceSelected
 ; 2. Add Windows Firewall Rule
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#MyAppName}"" dir=in action=allow protocol=TCP localport=631 program=""{app}\{#MyAppExeName}"" enable=yes"; Flags: runhidden waituntilterminated; StatusMsg: "Configuring Windows Firewall..."
 ; 3. Start Windows Service (Service mode only)
 Filename: "{sys}\sc.exe"; Parameters: "start {#MyAppName}"; Flags: runhidden waituntilterminated; StatusMsg: "Starting Windows Service..."; Check: IsServiceSelected
 ; 3.5. Start Startup Application immediately so port 631 is open for Add-Printer.ps1 (Startup App mode only)
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait runhidden; StatusMsg: "Starting Startup Application..."; Check: IsStartupAppSelected
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runhidden runasoriginaluser; StatusMsg: "Starting Startup Application..."; Check: IsStartupAppSelected
 ; 4. Run PowerShell script to add Windows Printer Queue
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""& '{app}\Setup\Add-Printer.ps1' -Scheme {code:GetProtocolScheme} *>&1 | Out-File -FilePath '{app}\printer_setup.log' -Encoding utf8"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing IPP Printer queue..."
 ; 5. Post-install options
 Filename: "{code:GetJobsDir}"; Description: "Open jobs folder"; Flags: postinstall shellexec skipifsilent unchecked
+Filename: "{app}"; Description: "Open installation folder"; Flags: postinstall shellexec skipifsilent unchecked
+Filename: "ms-settings:printers"; Description: "Open Windows Printers & Scanners settings"; Flags: postinstall shellexec skipifsilent unchecked
 Filename: "{code:GetInstallLogPath}"; Description: "View installation log"; Flags: postinstall shellexec skipifsilent unchecked
 Filename: "{app}\THIRD-PARTY-NOTICES.txt"; Description: "View third-party licenses and notices"; Flags: postinstall shellexec skipifsilent unchecked
 
 [UninstallRun]
-; 0.5 Stop Startup App process if running
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Stop-Process -Name '{#MyAppName}' -Force -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; RunOnceId: "StopStartupAppProcess"
-; 0.6 Stop Windows Service if running
-Filename: "{sys}\sc.exe"; Parameters: "stop {#MyAppName}"; Flags: runhidden waituntilterminated; RunOnceId: "StopService"
+; 0.5 Stop Windows Service and process synchronously if running
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Stop-Service -Name '{#MyAppName}' -Force -ErrorAction SilentlyContinue; Stop-Process -Name '{#MyAppName}' -Force -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; RunOnceId: "StopIppPrinterApp"
 ; 1. Run PowerShell script to remove Windows Printer Queue
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Setup\Remove-Printer.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "RemovePrinterQueue"
 ; 1.5. Run PowerShell script to remove certificate

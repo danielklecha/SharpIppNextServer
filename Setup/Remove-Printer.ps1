@@ -38,7 +38,6 @@ function Remove-IppPrinter {
 
 # Execute steps
 Assert-Administrator
-Restart-Spooler
 Remove-IppPrinter
 
 Write-Output "Printer removal completed successfully."

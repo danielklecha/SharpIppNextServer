@@ -4,8 +4,9 @@ if (-not $scriptDir) {
 }
 Push-Location $scriptDir
 try {
-    # Publish the application as WinExe for installer
-    Write-Host "Publishing IppPrinter as WinExe..." -ForegroundColor Green
+    # Clean previous build artifacts and publish the application as WinExe for installer
+    Write-Host "Cleaning and publishing IppPrinter as WinExe..." -ForegroundColor Green
+    dotnet clean ../IppPrinter/IppPrinter.csproj -c Release
     dotnet publish ../IppPrinter/IppPrinter.csproj -c Release -r win-x64 --self-contained false -p:OutputType=WinExe
 
     # Find ISCC.exe dynamically (checking real installation paths first, then PATH)

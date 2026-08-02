@@ -319,9 +319,27 @@ begin
     Result := False;
     Exit;
   end;
+end;
 
-  // Stop any running service or startup process immediately to release folder/file locks and free port 631
-  StopIppPrinterApp();
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = wpReady then
+  begin
+    // Stop any running instance to release port 631 before checking
+    StopIppPrinterApp();
+    if IsPortInUse('631') then
+    begin
+      if MsgBox('Warning: TCP Port 631 appears to be in use by another application.' + #13#10 +
+                'IppPrinter requires port 631 to receive print jobs.' + #13#10#13#10 +
+                'Do you want to proceed with installation anyway?',
+                mbConfirmation, MB_YESNO) = IDNO then
+      begin
+        Result := False;
+        Exit;
+      end;
+    end;
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -331,26 +349,21 @@ var
 begin
   if CurStep = ssInstall then
   begin
-    // 1. Stop service & process synchronously
+    // 1. Stop service & process synchronously FIRST to release file locks
     StopIppPrinterApp();
+
+    // 2. Ensure Jobs directory exists with proper permissions before shortcuts/files are created
+    SetupJobsDir();
     
-    // 2. Delete existing Windows service
+    // 3. Delete existing Windows service
     Exec('sc.exe', 'delete IppPrinter', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     
-    // 3. Remove legacy registry Run keys (replaced by Startup folder shortcut)
+    // 4. Remove legacy registry Run keys (replaced by Startup folder shortcut)
     RegDeleteValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'IppPrinter');
     RegDeleteValue(HKCU, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'IppPrinter');
 
-    // 4. Delete the Windows firewall rule to avoid duplicates
+    // 5. Delete the Windows firewall rule to avoid duplicates
     Exec('netsh.exe', 'advfirewall firewall delete rule name="IppPrinter"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-    // 5. Check if port 631 is in use and show warning if it is
-    if IsPortInUse('631') then
-    begin
-      MsgBox('Warning: Port 631 is in use by another application.' + #13#10 +
-             'The printer service might not work properly if this port is not free.',
-             mbInformation, MB_OK);
-    end;
   end
   else if CurStep = ssPostInstall then
   begin
@@ -363,6 +376,24 @@ begin
     begin
       CopyFile(LogFilePathName, DestLogPath, false);
       MergePrinterLogToSetupLog(DestLogPath, PrinterLogPath);
+    end;
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir: string;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    DataDir := ExpandConstant('{commonappdata}\IppPrinter');
+    if DirExists(DataDir) then
+    begin
+      if MsgBox('Would you like to delete all saved print jobs, logs, and configuration data in:' + #13#10 +
+                DataDir + '?', mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        DelTree(DataDir, True, True, True);
+      end;
     end;
   end;
 end;

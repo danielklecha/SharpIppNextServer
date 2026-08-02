@@ -36,13 +36,13 @@ function Install-WindowsFeature {
             $feature = Get-WindowsOptionalFeature -Online -FeatureName $featureName -ErrorAction SilentlyContinue
             if ($feature -and $feature.State -eq "Enabled") {
                 Write-Output "$featureName is already enabled."
-                return
+                return $false
             }
             if ($feature) {
                 Write-Output "Enabling $featureName..."
                 Enable-WindowsOptionalFeature -Online -FeatureName $featureName -NoRestart -ErrorAction Stop
                 Write-Output "$featureName has been installed successfully."
-                return
+                return $true
             }
         }
         Write-Error "Required features not found. Ensure this is a supported Windows version."
@@ -66,10 +66,29 @@ function Restart-Spooler {
 }
 
 function Add-IppPrinter {
-    if (Get-Printer -Name $printerName -ErrorAction SilentlyContinue) {
-        Write-Output "Printer '$printerName' already exists."
-        return
+    $existingPrinter = Get-Printer -Name $printerName -ErrorAction SilentlyContinue
+    if ($existingPrinter) {
+        $existingPort = $existingPrinter.PortName
+        $existingUrlProp = $null
+        try {
+            $prop = Get-PrinterProperty -PrinterName $printerName -Name "PrinterURL" -ErrorAction SilentlyContinue
+            if ($prop) { $existingUrlProp = $prop.Value }
+        } catch { }
+
+        if ($existingPort -eq $printerUrl -or $existingUrlProp -eq $printerUrl) {
+            Write-Output "Printer '$printerName' already exists with matching URL ($printerUrl)."
+            return
+        }
+
+        Write-Output "Printer '$printerName' exists but URL has changed (Current: '$existingPort', Target: '$printerUrl'). Re-creating printer queue..."
+        try {
+            Remove-Printer -Name $printerName -ErrorAction Stop
+            Write-Output "Removed old printer '$printerName'."
+        } catch {
+            Write-Warning "Could not remove old printer '$printerName': $_"
+        }
     }
+
     try {
         Write-Output "Waiting for IppPrinter service to become available on port $portNumber..."
         $maxWaitSeconds = 30
@@ -95,7 +114,7 @@ function Add-IppPrinter {
             Write-Output "Port $portNumber is listening."
         }
 
-        Write-Output "Adding printer: $printerName..."
+        Write-Output "Adding printer: $printerName with URL $printerUrl..."
         Add-Printer -Name $printerName -IppURL $printerUrl -ErrorAction Stop
         Write-Output "Printer '$printerName' added successfully."
     } catch {
@@ -107,8 +126,10 @@ function Add-IppPrinter {
 # Execute steps
 Assert-Administrator
 Import-Modules
-Install-WindowsFeature
-Restart-Spooler
+$featureInstalled = Install-WindowsFeature
+if ($featureInstalled) {
+    Restart-Spooler
+}
 Add-IppPrinter
 
 Write-Output "Printer setup completed successfully."

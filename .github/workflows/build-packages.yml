@@ -1,0 +1,82 @@
+name: Build Packages
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. 1.0.0 or v1.0.0)'
+        required: false
+        default: '1.0.0'
+        type: string
+
+jobs:
+  build-packages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Replace Version in csproj files
+      run: |
+        rawVersion="${{ inputs.version }}"
+        if [ -z "$rawVersion" ]; then rawVersion="1.0.0"; fi
+        tag=$(echo "$rawVersion" | sed 's/^v//')
+        find . -type f -name "*.csproj" -exec sed -i "s/<Version>.*<\/Version>/<Version>${tag}<\/Version>/g" {} \;
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Publish win-x64
+      run: dotnet publish --no-restore --configuration Release --runtime win-x64 --no-self-contained
+
+    - name: Pack win-x64
+      run: |
+        rawVersion="${{ inputs.version }}"
+        if [ -z "$rawVersion" ]; then rawVersion="1.0.0"; fi
+        tag="$rawVersion"
+        if [[ "$tag" != v* ]]; then tag="v$tag"; fi
+        zip -qq -r "$GITHUB_WORKSPACE/IppPrinter-$tag-win-x64.zip" *
+      working-directory: IppPrinter/bin/Release/net10.0/win-x64/publish/
+
+    - name: Publish linux-x64
+      run: dotnet publish --no-restore --configuration Release --runtime linux-x64 --no-self-contained
+
+    - name: Pack linux-x64
+      run: |
+        rawVersion="${{ inputs.version }}"
+        if [ -z "$rawVersion" ]; then rawVersion="1.0.0"; fi
+        tag="$rawVersion"
+        if [[ "$tag" != v* ]]; then tag="v$tag"; fi
+        zip -qq -r "$GITHUB_WORKSPACE/IppPrinter-$tag-linux-x64.zip" *
+      working-directory: IppPrinter/bin/Release/net10.0/linux-x64/publish/
+
+    - name: Publish osx-x64
+      run: dotnet publish --no-restore --configuration Release --runtime osx-x64 --no-self-contained
+
+    - name: Pack osx-x64
+      run: |
+        rawVersion="${{ inputs.version }}"
+        if [ -z "$rawVersion" ]; then rawVersion="1.0.0"; fi
+        tag="$rawVersion"
+        if [[ "$tag" != v* ]]; then tag="v$tag"; fi
+        zip -qq -r "$GITHUB_WORKSPACE/IppPrinter-$tag-osx-x64.zip" *
+      working-directory: IppPrinter/bin/Release/net10.0/osx-x64/publish/
+
+    - name: Upload Zip Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-zips
+        path: '*.zip'
+        retention-days: 1

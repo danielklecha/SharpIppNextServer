@@ -6,71 +6,37 @@ on:
       - 'v**'
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build-installer:
+    uses: ./.github/workflows/build-installer.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  build-packages:
+    uses: ./.github/workflows/build-packages.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  create-release:
+    needs: [build-installer, build-packages]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    defaults:
-      run:
-        shell: pwsh
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v7
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
+    - name: Download Installer Artifact
+      uses: actions/download-artifact@v4
       with:
-        dotnet-version: 10.0.x
+        name: installer-x64
+        path: ./artifacts
 
-    - name: Install Inno Setup
-      run: winget install --id JRSoftware.InnoSetup.7 -e -s winget --accept-package-agreements --accept-source-agreements --silent --scope machine
-
-    - name: Replace Version in csproj and iss files
-      run: |
-        $tag = "${{ github.ref_name }}".TrimStart('v')
-        Get-ChildItem -Filter *.csproj -Recurse | ForEach-Object {
-            (Get-Content $_.FullName) -replace '<Version>.*</Version>', "<Version>$tag</Version>" | Set-Content $_.FullName
-        }
-        (Get-Content Setup\installer.iss) -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$tag`"" | Set-Content Setup\installer.iss
-
-    - name: Restore dependencies
-      run: dotnet restore
-
-    - name: Publish win-x64
-      run: dotnet publish --no-restore --configuration Release --runtime win-x64 --no-self-contained
-
-    - name: Pack win-x64
-      run: Compress-Archive -Path * -DestinationPath "..\..\..\IppPrinter-${{github.ref_name}}-win-x64.zip" -Force
-      working-directory: IppPrinter/bin/Release/net10.0/win-x64/publish/
-
-    - name: Publish linux-x64
-      run: dotnet publish --no-restore --configuration Release --runtime linux-x64 --no-self-contained
-
-    - name: Pack linux-x64
-      run: Compress-Archive -Path * -DestinationPath "..\..\..\IppPrinter-${{github.ref_name}}-linux-x64.zip" -Force
-      working-directory: IppPrinter/bin/Release/net10.0/linux-x64/publish/
-
-    - name: Publish osx-x64
-      run: dotnet publish --no-restore --configuration Release --runtime osx-x64 --no-self-contained
-
-    - name: Pack osx-x64
-      run: Compress-Archive -Path * -DestinationPath "..\..\..\IppPrinter-${{github.ref_name}}-osx-x64.zip" -Force
-      working-directory: IppPrinter/bin/Release/net10.0/osx-x64/publish/
-
-    - name: Publish win-x64 as WinExe for Installer
-      run: dotnet publish --no-restore --configuration Release --runtime win-x64 --no-self-contained -p:OutputType=WinExe
-
-    - name: Build Inno Setup Installer
-      run: |
-        & "C:\Program Files\Inno Setup 7\ISCC.exe" Setup\installer.iss
-
-    - name: Copy Setup Installer to root release path
-      run: |
-        Copy-Item "Setup\Output\IppPrinterSetup.exe" -Destination ".\IppPrinter-${{github.ref_name}}-x64.exe"
+    - name: Download Zip Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: release-zips
+        path: ./artifacts
 
     - name: Create GitHub Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        $tag = "${{ github.ref_name }}"
-        gh release create "$tag" --generate-notes IppPrinter\bin\Release\*.zip .\IppPrinter-${{github.ref_name}}-x64.exe
+        tag="${{ github.ref_name }}"
+        gh release create "$tag" --generate-notes ./artifacts/*
