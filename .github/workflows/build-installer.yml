@@ -65,7 +65,7 @@ jobs:
         Copy-Item "Setup\Output\IppPrinterSetup.exe" -Destination ".\IppPrinter-v$cleanTag-x64.exe"
 
     - name: Upload Installer Artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: installer-x64
         path: .\IppPrinter-*-x64.exe

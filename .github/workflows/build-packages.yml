@@ -75,7 +75,7 @@ jobs:
       working-directory: IppPrinter/bin/Release/net10.0/osx-x64/publish/
 
     - name: Upload Zip Artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: release-zips
         path: '*.zip'
