@@ -14,6 +14,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL=https://github.com/danielklecha/IppPrinter
 AppSupportURL=https://github.com/danielklecha/IppPrinter/issues
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\icon.ico
 MinVersion=10.0.17763
 DefaultDirName={commonpf}\{#MyAppName}
 DefaultGroupName={#MyAppName}

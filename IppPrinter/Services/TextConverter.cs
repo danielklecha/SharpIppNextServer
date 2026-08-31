@@ -35,15 +35,14 @@ public class TextConverter : IDocumentConverter
         using var typeface = SKTypeface.FromFamilyName("Courier New") ?? SKTypeface.FromFamilyName("monospace") ?? SKTypeface.Default;
         float fontSize = 10f;
 
+        using var font = new SKFont(typeface, fontSize);
         using var paint = new SKPaint
         {
-            Typeface = typeface,
-            TextSize = fontSize,
             Color = SKColors.Black,
             IsAntialias = true
         };
 
-        float fontSpacing = paint.FontSpacing;
+        float fontSpacing = font.Spacing;
         using var pdfDocument = SKDocument.CreatePdf(output);
 
         float x = margin;
@@ -67,7 +66,7 @@ public class TextConverter : IDocumentConverter
             if (cancellationToken.IsCancellationRequested)
                 break;
 
-            var wrappedLines = WrapText(rawLine, paint, printWidth);
+            var wrappedLines = WrapText(rawLine, font, paint, printWidth);
             foreach (var line in wrappedLines)
             {
                 if (y > pageHeight - margin)
@@ -75,7 +74,7 @@ public class TextConverter : IDocumentConverter
                     StartNewPage();
                 }
 
-                canvas!.DrawText(line, x, y, paint);
+                canvas!.DrawText(line, x, y, font, paint);
                 y += fontSpacing;
             }
         }
@@ -89,7 +88,7 @@ public class TextConverter : IDocumentConverter
         return Task.CompletedTask;
     }
 
-    private static List<string> WrapText(string text, SKPaint paint, float maxWidth)
+    private static List<string> WrapText(string text, SKFont font, SKPaint paint, float maxWidth)
     {
         var result = new List<string>();
         if (string.IsNullOrEmpty(text))
@@ -101,7 +100,7 @@ public class TextConverter : IDocumentConverter
         int start = 0;
         while (start < text.Length)
         {
-            int count = (int)paint.BreakText(text.Substring(start), maxWidth, out _);
+            int count = font.BreakText(text.Substring(start), maxWidth, paint);
             if (count == 0)
             {
                 count = 1; // force advance at least one character to prevent infinite loop

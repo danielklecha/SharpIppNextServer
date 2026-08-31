@@ -71,12 +71,11 @@ public class ImageConverter : IDocumentConverter
         {
             using var paint = new SKPaint
             {
-                FilterQuality = SKFilterQuality.High,
                 IsAntialias = true
             };
 
             var destRect = new SKRect(x, y, x + destWidth, y + destHeight);
-            canvas.DrawBitmap(bitmap, destRect, paint);
+            canvas.DrawBitmap(bitmap, destRect, new SKSamplingOptions(SKCubicResampler.Mitchell), paint);
         }
         pdfDocument.EndPage();
         pdfDocument.Close();

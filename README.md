@@ -1,4 +1,4 @@
-# IppPrinter
+# <img src="icon.svg" width="36" height="36" valign="middle" /> IppPrinter
 
 [![GitHub downloads](https://img.shields.io/github/downloads/danielklecha/IppPrinter/total.svg)](https://github.com/danielklecha/IppPrinter/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.txt)
